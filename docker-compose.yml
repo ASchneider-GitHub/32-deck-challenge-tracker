@@ -8,8 +8,7 @@ services:
     container_name: deck32
     restart: unless-stopped
     ports:
-      # Plain HTTP on port 5002, on all of this machine's network interfaces,
-      # for a reverse proxy (e.g. nginx) that handles HTTPS in front of it.
+      # The site on port 5002, on all of this machine's network interfaces.
       - "5002:8032"
     environment:
       # Your public address, so manage.py prints correct links.

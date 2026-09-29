@@ -1,34 +1,25 @@
 # Admin guide
 
-Everything here runs on the server, over SSH. `manage.py` is the admin tool: it finds lists,
-recovers edit links, fixes accounts, and moderates the leaderboard. Changes it makes show up
-in the owner's History as **"by site admin"**.
+`manage.py` is the admin tool, built into the container: it finds lists, recovers edit
+links, fixes accounts, and moderates the leaderboard. Changes it makes show up in the
+owner's History as **"by site admin"**. Run everything here on the machine running the
+container.
 
 ## Setup: a `deck32` shortcut
 
-Every command needs to run as the `deck32` user, against the live database, with your site's
-address (so printed links are correct). Add this line to `~/.bashrc` on the server, with your
-domain, then run `source ~/.bashrc`:
+Add the line for how you started the container to `~/.bashrc`, then run `source ~/.bashrc`:
 
 ```bash
-alias deck32='sudo -u deck32 env DECK32_DB=/var/lib/deck32/deck32.db DECK32_URL=https://decks.example.com /opt/deck32/venv/bin/python /opt/deck32/manage.py'
+# Started with start.sh:
+alias deck32='docker exec -it deck32-tracker python manage.py'
+
+# Started with Docker Compose (use the path to your clone):
+alias deck32='docker compose -f /path/to/deck32/docker-compose.yml exec deck32 python manage.py'
 ```
 
 Now `deck32 <command>` works from any directory. Run `deck32` on its own for the built-in
-help.
-
-> **Started with `start.sh`?** Use this shortcut instead:
->
-> ```bash
-> alias deck32='docker exec -it deck32-tracker python manage.py'
-> ```
->
-> **Running with Docker Compose?** Use this shortcut instead, with the path to your clone.
-> The database path and site address come from `docker-compose.yml`:
->
-> ```bash
-> alias deck32='docker compose -f /path/to/deck32/docker-compose.yml exec deck32 python manage.py'
-> ```
+help. Printed links use `SITE_URL` from `start.sh` (or `DECK32_URL` in
+`docker-compose.yml`), so set that to your public address.
 
 ## Commands
 
@@ -149,80 +140,60 @@ their link has leaked: `reset` it and send them the new one.
 
 ## Backups
 
-`deploy/backup.sh` takes a consistent snapshot of the database, checks it isn't damaged,
-compresses it, and deletes backups older than 14 days. It's safe to run while the site is
-live.
+`deploy/backup.sh` is built into the image. It takes a consistent snapshot of the database,
+checks it isn't damaged, compresses it, and deletes backups older than 14 days. It's safe to
+run while the site is live. Backups land in the `backups/` folder next to `start.sh` on the
+host.
 
-> Don't back up with plain `cp`. SQLite may be partway through writing, and a raw copy can
-> catch it in a broken state. The script uses SQLite's own backup method instead.
+> Don't back up by copying the database file directly. SQLite may be partway through
+> writing, and a raw copy can catch it in a broken state. The script uses SQLite's own
+> backup method instead.
 
-### Set up (once)
-
-If you followed the README's deploy steps, this is already done. Otherwise, from the project
-folder:
-
-```bash
-sudo cp -r deploy /opt/deck32/
-sudo mkdir -p /var/backups/deck32
-sudo chown deck32:deck32 /var/backups/deck32
-sudo chmod 750 /var/backups/deck32        # backups contain edit links: keep them private
-sudo cp deploy/deck32-backup.cron /etc/cron.d/deck32-backup
-```
-
-It then runs every night at 3:30 AM (server time). Test it straight away rather than waiting:
+### Run a backup
 
 ```console
-$ sudo -u deck32 bash /opt/deck32/deploy/backup.sh
+$ docker exec deck32-tracker bash deploy/backup.sh
 snapshot ok: 12 lists
-wrote /var/backups/deck32/deck32-2026-09-30_033000.db.gz (12K)
+wrote /backups/deck32-2026-09-30_033000.db.gz (12K)
 ```
 
-Check on it any time with `tail /var/backups/deck32/backup.log` and
-`ls -lh /var/backups/deck32`. To change the time or retention, edit
-`/etc/cron.d/deck32-backup` (`DECK32_KEEP_DAYS` sets how many days are kept).
+With Docker Compose: `docker compose exec -T deck32 bash deploy/backup.sh`.
 
-### With Docker Compose
+### Every night, with cron
 
-The script is built into the image, and backups go to the `backups/` folder next to
-`docker-compose.yml`. Schedule it from the host's cron instead: create
-`/etc/cron.d/deck32-backup` containing (with your path):
+Create `/etc/cron.d/deck32-backup` on the host containing:
 
 ```
-30 3 * * * root docker compose -f /path/to/deck32/docker-compose.yml exec -T deck32 bash deploy/backup.sh >> /var/log/deck32-backup.log 2>&1
+# Nightly 32 Deck Challenge Tracker backup, 3:30 AM
+30 3 * * * root docker exec deck32-tracker bash deploy/backup.sh >> /var/log/deck32-backup.log 2>&1
 ```
 
-Test it with `sudo docker compose exec -T deck32 bash deploy/backup.sh`. If you started
-the site with `start.sh`, use `docker exec deck32-tracker bash deploy/backup.sh` in both the
-cron line and the test. To restore, stop the
-container (`docker compose stop`), then copy a backup into the volume:
+With Docker Compose, use `docker compose -f /path/to/deck32/docker-compose.yml exec -T deck32 bash deploy/backup.sh`
+as the command instead. Check on it with `tail /var/log/deck32-backup.log` and
+`ls -lh backups/`. Backups contain everyone's edit links, so keep the folder private:
+`chmod 750 backups`.
 
-```bash
-gunzip -c backups/deck32-2026-09-30_033000.db.gz > /tmp/restore.db
-docker compose run --rm -v /tmp/restore.db:/restore.db:ro deck32 \
-  sh -c 'cp /data/deck32.db /data/deck32.db.before-restore; rm -f /data/deck32.db-wal /data/deck32.db-shm; cp /restore.db /data/deck32.db'
-docker compose start
-```
+### Keep a copy on another machine
 
-### Keep a copy off the server
-
-Backups on the same machine won't survive that machine's disk failing or the server being
-lost. Copy them somewhere else regularly. Two simple options:
-
-- **Pull from another computer** (e.g. a home PC) on a schedule:
-  `rsync -a you@server:/var/backups/deck32/ ~/deck32-backups/`
-- **Push to cloud storage** with [rclone](https://rclone.org) from a second cron line on the
-  server.
+Backups on the same machine won't survive its disk failing. Copy the `backups/` folder
+somewhere else regularly, for example with `rsync` from another computer, or to cloud
+storage with [rclone](https://rclone.org).
 
 ### Restore
 
+Everything since the chosen backup is lost, including new lists, edits and link changes. The
+current database is kept as `deck32.db.before-restore` in case you pick the wrong file.
+
 ```bash
-sudo systemctl stop deck32
-sudo -u deck32 cp /var/lib/deck32/deck32.db /var/lib/deck32/deck32.db.before-restore
-sudo -u deck32 rm -f /var/lib/deck32/deck32.db-wal /var/lib/deck32/deck32.db-shm
-gunzip -c /var/backups/deck32/deck32-2026-09-30_033000.db.gz | sudo -u deck32 tee /var/lib/deck32/deck32.db > /dev/null
-sudo systemctl start deck32
+docker stop deck32-tracker
+gunzip -c backups/deck32-2026-09-30_033000.db.gz > /tmp/restore.db
+docker run --rm -v deck32-data:/data -v /tmp/restore.db:/restore.db:ro deck32-tracker \
+  sh -c 'cp /data/deck32.db /data/deck32.db.before-restore; rm -f /data/deck32.db-wal /data/deck32.db-shm; cp /restore.db /data/deck32.db'
+docker start deck32-tracker
 ```
 
-Everything since that backup is lost, including new lists, edits and link changes. The
-`.before-restore` copy lets you go back if you picked the wrong file. Try a restore once
-before you need it for real.
+With Docker Compose: `docker compose stop`, then the same `gunzip` line, then
+`docker compose run --rm -v /tmp/restore.db:/restore.db:ro deck32 sh -c '…same command…'`,
+then `docker compose start`.
+
+Try a restore once before you need it for real.

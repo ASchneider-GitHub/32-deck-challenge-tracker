@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Nightly backup of the 32 Deck Challenge Tracker database.
+# Backup of the 32 Deck Challenge Tracker database. Runs inside the container:
+#   docker exec deck32-tracker bash deploy/backup.sh
 #
 # Uses SQLite's online backup API (through Python's standard library, so no
 # extra packages), which takes a consistent snapshot even while the site is
@@ -7,13 +8,13 @@
 # half-written state.
 #
 # Settings (environment variables):
-#   DECK32_DB           database to back up   (default /var/lib/deck32/deck32.db)
-#   DECK32_BACKUP_DIR   where backups go      (default /var/backups/deck32)
+#   DECK32_DB           database to back up   (default /data/deck32.db)
+#   DECK32_BACKUP_DIR   where backups go      (default /backups, mounted from the host)
 #   DECK32_KEEP_DAYS    days of backups kept  (default 14)
 set -euo pipefail
 
-DB="${DECK32_DB:-/var/lib/deck32/deck32.db}"
-DIR="${DECK32_BACKUP_DIR:-/var/backups/deck32}"
+DB="${DECK32_DB:-/data/deck32.db}"
+DIR="${DECK32_BACKUP_DIR:-/backups}"
 KEEP_DAYS="${DECK32_KEEP_DAYS:-14}"
 
 mkdir -p "$DIR"
