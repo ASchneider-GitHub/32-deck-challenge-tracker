@@ -897,7 +897,7 @@ async function renderBoard() {
   }
   const table = el("table", { class: "board" },
     el("thead", {}, el("tr", {},
-      el("th", {}, "Player"), el("th", {}, "Built"), el("th", {}, "Planned"), el("th", {}, ""))),
+      el("th", {}, "User"), el("th", {}, "Built"), el("th", {}, "Planned"), el("th", {}, ""))),
     el("tbody", {}, ...rows.map((r) => el("tr", {},
       el("td", {}, el("a", { href: `${BASE}/v/${r.share_id}` }, r.name)),
       el("td", { class: "num" }, `${r.done} / 32`),
