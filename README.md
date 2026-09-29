@@ -5,7 +5,7 @@ Track one Commander deck per color identity. Each list gets:
 - **Edit link** `/e/<uuid>`: private, works like a password, always a random UUID
 - **Share link** `/v/<id>`: public, read-only, can be customized (e.g. `/v/johndoe`)
 - A public **leaderboard** at `/board` (users can opt out)
-- A **username + recovery passphrase**, chosen at signup, which players can enter at
+- A **username + recovery passphrase**, chosen at signup, which users can enter at
   `/recover` to get their edit link back
 
 Data lives in a single SQLite file. Edit tokens are stored in plaintext so the admin can
