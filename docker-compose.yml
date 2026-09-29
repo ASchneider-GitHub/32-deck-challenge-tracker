@@ -11,8 +11,10 @@ services:
       # The site on port 5002, on all of this machine's network interfaces.
       - "5002:8032"
     environment:
-      # Your public address, so manage.py prints correct links.
+      # Your public address (including any base path), so manage.py prints correct links.
       DECK32_URL: https://decks.example.com
+      # Sub-path the site is served under, e.g. /32dc. Empty serves it at the root.
+      DECK32_BASE_PATH: ""
     volumes:
       - deck32-data:/data
       # Nightly backups land here on the host (see ADMIN.md).

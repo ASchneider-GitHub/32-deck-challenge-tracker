@@ -10,6 +10,11 @@ const MINE_KEY = "deck32.mine";
 
 const app = document.getElementById("app");
 
+// Sub-path the site is served under (e.g. "/32dc"), filled in by the server;
+// "" when served at the root. Every link and request goes through BASE.
+const BASE = document.documentElement.dataset.base || "";
+const SITE = location.origin + BASE;
+
 // ---------- Light/dark switch ----------
 // The switch always shows the mode in use. With no saved choice that follows
 // the system setting; flipping it saves an explicit choice in this browser
@@ -65,7 +70,7 @@ function el(tag, attrs, ...children) {
 }
 
 async function api(method, path, body) {
-  const res = await fetch(path, {
+  const res = await fetch(BASE + path, {
     method,
     headers: body ? { "Content-Type": "application/json" } : {},
     body: body ? JSON.stringify(body) : undefined,
@@ -96,7 +101,7 @@ function pips(slot) {
   const icons = el("span", { class: "pip-icons", "aria-hidden": "true" });
   // Mana symbols from Scryfall (svgs.scryfall.io/card-symbols), saved in static/symbols.
   for (const c of slot) {
-    icons.append(el("img", { src: `/static/symbols/${c.toUpperCase()}.svg`, alt: "" }));
+    icons.append(el("img", { src: `${BASE}/static/symbols/${c.toUpperCase()}.svg`, alt: "" }));
   }
   return el("div", { class: "pips", title: slotLabel(slot) },
     icons, el("span", { class: "pip-name" }, `(${SLOT_NAMES[slot]})`));
@@ -333,7 +338,7 @@ function renderHome() {
     try {
       const res = await api("POST", "/api/lists", { username, passphrase: pass.value });
       rememberMine(res.edit_token, username);
-      location.href = "/e/" + res.edit_token;
+      location.href = `${BASE}/e/${res.edit_token}`;
     } catch (err) {
       msg.textContent = err.status === 429 ? "Too many new lists. Try again in a minute." : err.message;
     }
@@ -350,7 +355,7 @@ function renderHome() {
   if (mine.length) {
     children.push(el("div", { class: "card" },
       el("h2", {}, "Lists opened in this browser"),
-      el("ul", {}, ...mine.map((m) => el("li", {}, el("a", { href: "/e/" + m.token }, m.name)))),
+      el("ul", {}, ...mine.map((m) => el("li", {}, el("a", { href: `${BASE}/e/${m.token}` }, m.name)))),
       el("p", { class: "muted" },
         "Shortcuts saved in this browser only. They don't follow you to other devices and " +
         "disappear if you clear your browsing data. Your lists themselves are safe on the server.")));
@@ -373,7 +378,7 @@ function renderRecover() {
       const res = await api("POST", "/api/recover",
         { username: user.value.trim(), passphrase: pass.value });
       rememberMine(res.edit_token, res.name);
-      location.href = "/e/" + res.edit_token;
+      location.href = `${BASE}/e/${res.edit_token}`;
     } catch (err) {
       msg.textContent = err.message;
     }
@@ -670,7 +675,7 @@ async function renderEdit(token) {
   // Flush pending edits if the tab is closed or backgrounded.
   function flush() {
     if (!dirty) return;
-    fetch("/api/edit/" + token, {
+    fetch(`${BASE}/api/edit/${token}`, {
       method: "PUT", keepalive: true,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(takePayload().body),
@@ -681,9 +686,8 @@ async function renderEdit(token) {
     if (document.visibilityState === "hidden") flush();
   });
 
-  const origin = location.origin;
-  const editUrl = () => `${origin}/e/${token}`;
-  const shareUrl = () => `${origin}/v/${data.share_id}`;
+  const editUrl = () => `${SITE}/e/${token}`;
+  const shareUrl = () => `${SITE}/v/${data.share_id}`;
 
   const listedBox = el("input", { type: "checkbox" });
   listedBox.checked = data.listed;
@@ -710,7 +714,7 @@ async function renderEdit(token) {
         ? `Needs at least ${MIN_SHARE_ID} letters, numbers, - or _`
         : cleaned.length > MAX_SHARE_ID
           ? `Must be at most ${MAX_SHARE_ID} characters (${cleaned.length} now)`
-          : `New share link: ${origin}/v/${cleaned}`;
+          : `New share link: ${SITE}/v/${cleaned}`;
   };
   customInput.addEventListener("input", updatePreview);
 
@@ -751,7 +755,7 @@ async function renderEdit(token) {
       forgetMine(token);
       token = res.edit_token;
       rememberMine(token, data.name);
-      history.replaceState(null, "", "/e/" + token);
+      history.replaceState(null, "", `${BASE}/e/${token}`);
       editCode.textContent = editUrl();
       showLinkMsg("Edit link changed. The old one no longer works, so update your bookmark.");
       changeLog.refresh();
@@ -813,7 +817,7 @@ function recoveryPanel(getToken, data, onSaved) {
       intro.textContent = "Choose a username and passphrase so you can get your edit link back if you lose it.";
     } else {
       summary.textContent = "Change recovery passphrase";
-      intro.textContent = `Your username is ${data.username}. To recover your edit link, enter it with your passphrase at ${location.origin}/recover.`;
+      intro.textContent = `Your username is ${data.username}. To recover your edit link, enter it with your passphrase at ${SITE}/recover.`;
     }
   }
   describe();
@@ -895,7 +899,7 @@ async function renderBoard() {
     el("thead", {}, el("tr", {},
       el("th", {}, "Player"), el("th", {}, "Built"), el("th", {}, "Planned"), el("th", {}, ""))),
     el("tbody", {}, ...rows.map((r) => el("tr", {},
-      el("td", {}, el("a", { href: "/v/" + r.share_id }, r.name)),
+      el("td", {}, el("a", { href: `${BASE}/v/${r.share_id}` }, r.name)),
       el("td", { class: "num" }, `${r.done} / 32`),
       el("td", { class: "num" }, `${r.filled} / 32`),
       el("td", {}, el("div", { class: "bar" },
@@ -905,7 +909,10 @@ async function renderBoard() {
 
 // ---------- Router ----------
 
-const path = location.pathname;
+// Path within the site, with the base path removed ("/32dc/board" -> "/board").
+const path = location.pathname.startsWith(BASE + "/")
+  ? location.pathname.slice(BASE.length)
+  : location.pathname;
 let m;
 if ((m = path.match(/^\/e\/([\w-]+)$/))) renderEdit(m[1]);
 else if ((m = path.match(/^\/v\/([\w-]+)$/))) renderView(m[1]);

@@ -21,11 +21,17 @@ import time
 import uuid
 from urllib.parse import urlsplit
 
-from flask import Flask, abort, g, jsonify, request, send_from_directory
+from flask import Flask, Response, abort, g, jsonify, request, send_from_directory
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.environ.get("DECK32_DB", os.path.join(BASE_DIR, "deck32.db"))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
+
+# Serve the site under a sub-path, e.g. DECK32_BASE_PATH=/32dc for
+# https://example.com/32dc/. Empty (the default) serves it at the root.
+BASE_PATH = os.environ.get("DECK32_BASE_PATH", "").strip().rstrip("/")
+if BASE_PATH and not re.fullmatch(r"(/[A-Za-z0-9._~-]+)+", BASE_PATH):
+    raise SystemExit(f"DECK32_BASE_PATH must look like /32dc, got {BASE_PATH!r}")
 
 # Canonical slot keys, matching the order on the printed sheet.
 SLOTS = [
@@ -103,6 +109,32 @@ CREATE INDEX IF NOT EXISTS history_list ON history(list_id, id);
 
 app = Flask(__name__, static_folder=None)
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024
+
+
+class BasePathMiddleware:
+    """Serve the app under BASE_PATH, so routes don't need to know about it.
+
+    Works whether the proxy in front keeps the prefix (/32dc/api/board) or
+    strips it (/api/board): both reach the /api/board route. The pages always
+    link to prefixed addresses, so browsers stay inside BASE_PATH."""
+
+    def __init__(self, wsgi_app, base):
+        self.wsgi_app = wsgi_app
+        self.base = base
+
+    def __call__(self, environ, start_response):
+        path = environ.get("PATH_INFO", "")
+        if path == self.base:
+            # "/32dc" -> "/32dc/", so relative addresses resolve inside it.
+            start_response("301 Moved Permanently", [("Location", self.base + "/")])
+            return [b""]
+        if path.startswith(self.base + "/"):
+            environ["PATH_INFO"] = path[len(self.base):]
+        return self.wsgi_app(environ, start_response)
+
+
+if BASE_PATH:
+    app.wsgi_app = BasePathMiddleware(app.wsgi_app, BASE_PATH)
 
 
 def get_db():
@@ -650,7 +682,7 @@ def board():
 def not_found(_e):
     if request.path.startswith("/api/"):
         return jsonify(error="Not found"), 404
-    return send_from_directory(STATIC_DIR, "index.html"), 404
+    return index_page(), 404
 
 
 @app.errorhandler(413)
@@ -666,7 +698,15 @@ def too_large(_e):
 @app.get("/e/<_token>")
 @app.get("/v/<_share>")
 def index(_token=None, _share=None):
-    return send_from_directory(STATIC_DIR, "index.html")
+    return index_page()
+
+
+def index_page():
+    """index.html with {{BASE}} filled in, so page links, scripts and styles
+    point inside BASE_PATH. (BASE_PATH is validated above: no quotes or <>.)"""
+    with open(os.path.join(STATIC_DIR, "index.html"), encoding="utf-8") as f:
+        html = f.read().replace("{{BASE}}", BASE_PATH)
+    return Response(html, mimetype="text/html")
 
 
 @app.get("/static/<path:filename>")

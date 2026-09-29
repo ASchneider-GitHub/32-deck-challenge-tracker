@@ -16,8 +16,13 @@ passphrases, recovery for that username pauses for 15 minutes.
 
     git clone https://github.com/ASchneider-GitHub/32-deck-challenge-tracker.git
     cd 32-deck-challenge-tracker
-    # set SITE_URL at the top of start.sh to your public address
+    # edit the top of start.sh: SITE_URL (your public address) and BASE_PATH
     ./start.sh
+
+If the site lives under a sub-path, set both, e.g. for `https://mtg.aschneider.tech/32dc`:
+`SITE_URL="https://mtg.aschneider.tech/32dc"` and `BASE_PATH="/32dc"`. Leave `BASE_PATH`
+empty to serve it at the root of the address. Requests work whether the proxy in front keeps
+the `/32dc` prefix or strips it.
 
 `start.sh` builds the image, replaces any running container, starts it on port 5002 and
 follows the logs. Press Ctrl+C to stop following the logs; the site keeps running. Re-run it
@@ -26,7 +31,7 @@ after a `git pull` to deploy an update.
 The database lives in the `deck32-data` Docker volume, so it survives rebuilds, restarts and
 updates. Backups go to the `backups/` folder (see ADMIN.md).
 
-**Or with Docker Compose:** set `DECK32_URL` in `docker-compose.yml`, run
+**Or with Docker Compose:** set `DECK32_URL` and `DECK32_BASE_PATH` in `docker-compose.yml`, run
 `mkdir -p backups && sudo chown 10001:10001 backups`, then `docker compose up -d --build`.
 Pick one method: they use different volume names, so each has its own database.
 
