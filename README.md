@@ -3,8 +3,8 @@
 Track one Commander deck per color identity. Each list gets:
 
 - **Edit link** `/e/<uuid>`: private, works like a password, always a random UUID
-- **Share link** `/v/<id>`: public, read-only, can be customized (e.g. `/v/alex`)
-- A public **leaderboard** at `/board` (players can opt out)
+- **Share link** `/v/<id>`: public, read-only, can be customized (e.g. `/v/johndoe`)
+- A public **leaderboard** at `/board` (users can opt out)
 - A **username + recovery passphrase**, chosen at signup, which players can enter at
   `/recover` to get their edit link back
 
@@ -12,7 +12,7 @@ Data lives in a single SQLite file. Edit tokens are stored in plaintext so the a
 recover them. Passphrases are stored only as salted scrypt hashes. After 5 wrong
 passphrases, recovery for that username pauses for 15 minutes.
 
-## Run with Docker (port 5002)
+## Run with Docker
 
     git clone https://github.com/ASchneider-GitHub/32-deck-challenge-tracker.git
     cd 32-deck-challenge-tracker
