@@ -1,0 +1,11 @@
+# Nightly database backup for the 32 Deck Challenge Tracker.
+# Install: sudo cp deploy/deck32-backup.cron /etc/cron.d/deck32-backup
+# (files in /etc/cron.d need no extension, root ownership, and mode 644)
+#
+# Runs at 3:30 AM server time as the deck32 user. Output (including any
+# failure) is appended to the log next to the backups.
+DECK32_DB=/var/lib/deck32/deck32.db
+DECK32_BACKUP_DIR=/var/backups/deck32
+DECK32_KEEP_DAYS=14
+
+30 3 * * * deck32 bash /opt/deck32/deploy/backup.sh >> /var/backups/deck32/backup.log 2>&1

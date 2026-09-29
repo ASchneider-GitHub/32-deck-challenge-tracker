@@ -1,0 +1,25 @@
+# Databases: live data, never commit (running app.py locally creates deck32.db here)
+*.db
+*.db-wal
+*.db-shm
+*.db.gz
+*.db.partial
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Local environment / editor
+.env
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Docker backup folder (bind-mounted into the container)
+backups/
+
+# Screenshots taken while designing the site
+Site Screenshots/

@@ -1,0 +1,23 @@
+# Start:   docker compose up -d --build
+# Admin:   docker compose exec deck32 python manage.py list
+# Logs:    docker compose logs -f
+services:
+  deck32:
+    build: .
+    image: deck32-tracker
+    container_name: deck32
+    restart: unless-stopped
+    ports:
+      # Plain HTTP on port 5002, on all of this machine's network interfaces,
+      # for a reverse proxy (e.g. nginx) that handles HTTPS in front of it.
+      - "5002:8032"
+    environment:
+      # Your public address, so manage.py prints correct links.
+      DECK32_URL: https://decks.example.com
+    volumes:
+      - deck32-data:/data
+      # Nightly backups land here on the host (see ADMIN.md).
+      - ./backups:/backups
+
+volumes:
+  deck32-data:

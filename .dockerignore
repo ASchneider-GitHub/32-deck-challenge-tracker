@@ -1,0 +1,12 @@
+.git
+.gitignore
+*.db
+*.db-wal
+*.db-shm
+backups/
+__pycache__/
+*.pyc
+venv/
+.venv/
+Screenshot_1.png
+Site Screenshots/
