@@ -68,7 +68,11 @@ SESSION_GAP_SECONDS = 30 * 60
 # entry, so autosaving while typing "Raffine" doesn't log "R", "Ra", "Raf"...
 HISTORY_MERGE_SECONDS = 10 * 60
 HISTORY_KINDS = ("created", "deck", "link", "done", "listed", "share_link",
-                 "edit_link", "passphrase", "username", "admin_hidden")
+                 "edit_link", "passphrase", "username", "admin_hidden",
+                 "extra_added", "extra_removed", "extra_deck", "extra_link",
+                 "extra_slot", "extra_done")
+# Spare decks beyond the one per color identity ("Additional Decks").
+MAX_EXTRAS = 64
 HISTORY_PAGE = 100
 
 # username, pass_hash, failed_attempts and locked_until are added to older
@@ -105,6 +109,16 @@ CREATE TABLE IF NOT EXISTS history (
     by       TEXT    NOT NULL DEFAULT 'owner'  -- 'owner' or 'admin'
 );
 CREATE INDEX IF NOT EXISTS history_list ON history(list_id, id);
+-- Additional decks: any number per color identity, not part of the 32.
+CREATE TABLE IF NOT EXISTS extras (
+    id       INTEGER PRIMARY KEY,
+    list_id  INTEGER NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
+    slot     TEXT    NOT NULL,
+    deck     TEXT    NOT NULL DEFAULT '',
+    link     TEXT    NOT NULL DEFAULT '',
+    done     INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS extras_list ON extras(list_id);
 """
 
 app = Flask(__name__, static_folder=None)
@@ -179,6 +193,14 @@ def init_db():
     ):
         if col not in list_cols:
             db.execute(f"ALTER TABLE lists ADD COLUMN {col} {decl}")
+    extra_cols = {r[1] for r in db.execute("PRAGMA table_info(extras)")}
+    if "done" not in extra_cols:
+        db.execute("ALTER TABLE extras ADD COLUMN done INTEGER NOT NULL DEFAULT 0")
+    history_cols = {r[1] for r in db.execute("PRAGMA table_info(history)")}
+    if "extra_id" not in history_cols:
+        # Which additional deck an extra_* entry is about, since several can
+        # share a color identity.
+        db.execute("ALTER TABLE history ADD COLUMN extra_id INTEGER")
     db.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS lists_username"
         " ON lists(username COLLATE NOCASE)"
@@ -325,7 +347,8 @@ def set_share_id(db, list_id, slug):
     return True
 
 
-def log_event(db, list_id, kind, slot=None, old=None, new=None, by="owner", merge=False):
+def log_event(db, list_id, kind, slot=None, old=None, new=None, by="owner", merge=False,
+              extra_id=None):
     """Add a history entry (the caller commits).
 
     With merge=True, a recent entry for the same field is updated instead, and
@@ -333,22 +356,24 @@ def log_event(db, list_id, kind, slot=None, old=None, new=None, by="owner", merg
     """
     now = int(time.time())
     if merge:
+        # Additional decks are matched by id alone, since their color can change.
         recent = db.execute(
             "SELECT id, old, at FROM history WHERE list_id = ? AND kind = ?"
-            " AND slot IS ? AND by = ? ORDER BY id DESC LIMIT 1",
-            (list_id, kind, slot, by),
+            " AND (slot IS ? OR ? IS NOT NULL) AND extra_id IS ? AND by = ?"
+            " ORDER BY id DESC LIMIT 1",
+            (list_id, kind, slot, extra_id, extra_id, by),
         ).fetchone()
         if recent and now - recent["at"] <= HISTORY_MERGE_SECONDS:
             if recent["old"] == new:
                 db.execute("DELETE FROM history WHERE id = ?", (recent["id"],))
             else:
-                db.execute("UPDATE history SET new = ?, at = ? WHERE id = ?",
-                           (new, now, recent["id"]))
+                db.execute("UPDATE history SET new = ?, at = ?, slot = ? WHERE id = ?",
+                           (new, now, slot, recent["id"]))
             return
     db.execute(
-        "INSERT INTO history (list_id, at, kind, slot, old, new, by)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (list_id, now, kind, slot, old, new, by),
+        "INSERT INTO history (list_id, at, kind, slot, old, new, by, extra_id)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (list_id, now, kind, slot, old, new, by, extra_id),
     )
 
 
@@ -372,6 +397,16 @@ def load_entries(db, list_id):
     }
 
 
+def load_extras(db, list_id):
+    """Additional decks in sheet order (by color identity), oldest first."""
+    rows = db.execute(
+        "SELECT id, slot, deck, link, done FROM extras WHERE list_id = ? ORDER BY id",
+        (list_id,),
+    ).fetchall()
+    extras = [dict(r, done=bool(r["done"])) for r in rows]
+    return sorted(extras, key=lambda r: SLOTS.index(r["slot"]))
+
+
 def serialize(db, row, include_token):
     data = {
         "name": row["name"],
@@ -379,7 +414,12 @@ def serialize(db, row, include_token):
         "listed": bool(row["listed"]),
         "updated_at": row["updated_at"],
         "entries": load_entries(db, row["id"]),
+        "extras": load_extras(db, row["id"]),
     }
+    if not include_token:
+        # Viewers don't need ids, or decks the owner hasn't filled in yet.
+        data["extras"] = [{k: e[k] for k in ("slot", "deck", "link", "done")}
+                          for e in data["extras"] if e["deck"] or e["link"]]
     if include_token:
         data["edit_token"] = row["edit_token"]
         data["username"] = row["username"]
@@ -572,6 +612,35 @@ def update_list(token):
             log_event(db, row["id"], "done", slot, str(int(prev["done"])), str(done),
                       merge=True)
 
+    extras = body.get("extras") or {}
+    if not isinstance(extras, dict):
+        return jsonify(error="Invalid extras"), 400
+    for extra_id, extra in extras.items():
+        if not isinstance(extra, dict) or not str(extra_id).isdigit():
+            continue
+        prev = db.execute(
+            "SELECT * FROM extras WHERE id = ? AND list_id = ?",
+            (int(extra_id), row["id"]),
+        ).fetchone()
+        if prev is None:  # removed meanwhile, e.g. on another device
+            continue
+        deck = clean_text(extra.get("deck"), MAX_DECK)
+        link = clean_link(extra.get("link"))
+        if link is None:  # invalid: keep the saved one, same rule as the main decks
+            link = prev["link"]
+        # Missing (or invalid) color/checkbox leaves them as they were.
+        slot = extra.get("slot") if extra.get("slot") in SLOT_SET else prev["slot"]
+        done = (1 if extra["done"] else 0) if "done" in extra else prev["done"]
+        db.execute("UPDATE extras SET slot = ?, deck = ?, link = ?, done = ? WHERE id = ?",
+                   (slot, deck, link, done, prev["id"]))
+        for kind, old, new in (("extra_slot", prev["slot"], slot),
+                               ("extra_deck", prev["deck"], deck),
+                               ("extra_link", prev["link"], link),
+                               ("extra_done", str(prev["done"]), str(done))):
+            if old != new:
+                log_event(db, row["id"], kind, slot, old, new, merge=True,
+                          extra_id=prev["id"])
+
     db.execute(
         # Editing keeps the current session alive for "Last login".
         "UPDATE lists SET updated_at = ?1, seen_at = ?1 WHERE id = ?2",
@@ -580,6 +649,52 @@ def update_list(token):
     db.commit()
     row = db.execute("SELECT * FROM lists WHERE id = ?", (row["id"],)).fetchone()
     return jsonify(serialize(db, row, include_token=True))
+
+
+@app.post("/api/edit/<token>/extras")
+def add_extra(token):
+    """Add an empty additional deck for a color identity."""
+    row = find_by_token(token)
+    body = request.get_json(silent=True) or {}
+    slot = body.get("slot")
+    if slot not in SLOT_SET:
+        return jsonify(error="Pick a color identity"), 400
+    db = get_db()
+    count = db.execute("SELECT COUNT(*) FROM extras WHERE list_id = ?",
+                       (row["id"],)).fetchone()[0]
+    if count >= MAX_EXTRAS:
+        return jsonify(error=f"You can list at most {MAX_EXTRAS} additional decks"), 400
+    extra_id = db.execute("INSERT INTO extras (list_id, slot) VALUES (?, ?)",
+                          (row["id"], slot)).lastrowid
+    log_event(db, row["id"], "extra_added", slot, extra_id=extra_id)
+    db.execute("UPDATE lists SET updated_at = ?1, seen_at = ?1 WHERE id = ?2",
+               (int(time.time()), row["id"]))
+    db.commit()
+    return jsonify(id=extra_id, slot=slot, deck="", link="", done=False), 201
+
+
+@app.delete("/api/edit/<token>/extras/<int:extra_id>")
+def remove_extra(token, extra_id):
+    row = find_by_token(token)
+    db = get_db()
+    extra = db.execute("SELECT * FROM extras WHERE id = ? AND list_id = ?",
+                       (extra_id, row["id"])).fetchone()
+    if extra is not None:
+        db.execute("DELETE FROM extras WHERE id = ?", (extra_id,))
+        untouched = not (extra["deck"] or extra["link"] or extra["done"]) and db.execute(
+            "SELECT 1 FROM history WHERE list_id = ? AND extra_id = ?"
+            " AND kind != 'extra_added'", (row["id"], extra_id)).fetchone() is None
+        if untouched:
+            # Added by mistake and never filled in: leave no trace in history.
+            db.execute("DELETE FROM history WHERE list_id = ? AND extra_id = ?",
+                       (row["id"], extra_id))
+        else:
+            log_event(db, row["id"], "extra_removed", extra["slot"], old=extra["deck"],
+                      extra_id=extra_id)
+        db.execute("UPDATE lists SET updated_at = ?1, seen_at = ?1 WHERE id = ?2",
+                   (int(time.time()), row["id"]))
+        db.commit()
+    return jsonify(ok=True)
 
 
 @app.post("/api/edit/<token>/edit-link")

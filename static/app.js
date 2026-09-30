@@ -391,6 +391,60 @@ function renderRecover() {
       "Forgot your passphrase too? Ask the site admin. They can look up your list and send you the link.")));
 }
 
+// Deck name (with commander suggestions) and link inputs for one deck.
+// Edits go into `entry`; `onChange` is called after each one.
+function deckFields(entry, slot, onChange) {
+  if (entry.link == null) entry.link = "";
+  const input = el("input", {
+    type: "text", class: "deck-field", value: entry.deck, maxlength: "200",
+    "aria-label": `${SLOT_NAMES[slot]} deck name`, placeholder: "Deck name",
+  });
+  const linkInput = el("input", {
+    type: "url", class: "link-field", value: entry.link, maxlength: "500",
+    placeholder: "Deck link (https://…)",
+    "aria-label": `${slotLabel(slot)} deck link`,
+  });
+  const linkHint = el("small", { class: "link-hint", hidden: true },
+    "Not Saved! Links must start with https:// and point to Archidekt, Manabox, Moxfield, or TopDecked");
+  // An invalid link turns red and is left out of the save: entry.link keeps
+  // the last valid value, while the deck name and checkbox still save.
+  const checkLink = () => {
+    const link = normalizeLink(linkInput.value);
+    linkInput.classList.toggle("invalid", link === null);
+    linkHint.hidden = link !== null;
+    if (link !== null) entry.link = link;
+  };
+  checkLink();  // older lists may hold links saved before these rules
+  linkInput.addEventListener("input", () => { checkLink(); onChange(); });
+  // Long links scroll while typing; show the start again once done.
+  linkInput.addEventListener("blur", () => {
+    linkInput.setSelectionRange(0, 0);
+    linkInput.scrollLeft = 0;
+  });
+  const commit = () => {
+    entry.deck = input.value;
+    onChange();
+  };
+  input.addEventListener("input", commit);
+  attachSuggest(input, slot, commit);
+  const fields = el("div", { class: "fields" },
+    el("div", { class: "deck-wrap" }, input), linkInput, linkHint);
+  return { fields, input };
+}
+
+// Read-only version: deck name, with its link underneath. Only valid HTTPS
+// links are clickable; anything else is plain text.
+function deckText(entry) {
+  const safeLink = entry.link && normalizeLink(entry.link);
+  const linkEl = safeLink
+    ? el("a", {
+      class: "deck-link", href: safeLink, title: safeLink,
+      target: "_blank", rel: "noopener noreferrer nofollow ugc",
+    }, safeLink)
+    : entry.link ? el("span", { class: "deck-link muted" }, entry.link) : null;
+  return el("div", { class: "fields" }, el("div", { class: "deck-text" }, entry.deck), linkEl);
+}
+
 function renderSheet(data, editable, onChange) {
   const entries = data.entries;
   const progress = el("span", { class: "progress" });
@@ -401,69 +455,26 @@ function renderSheet(data, editable, onChange) {
 
   function slotRow(slot) {
     const entry = entries[slot] || (entries[slot] = { deck: "", link: "", done: false });
-    if (entry.link == null) entry.link = "";
     const row = el("div", { class: "slot" + (entry.done ? " done" : "") }, pips(slot));
 
     if (editable) {
-      const input = el("input", {
-        type: "text", class: "deck-field", value: entry.deck, maxlength: "200",
-        "aria-label": `${SLOT_NAMES[slot]} deck name`, placeholder: "Deck name",
-      });
-      const linkInput = el("input", {
-        type: "url", class: "link-field", value: entry.link, maxlength: "500",
-        placeholder: "Deck link (https://…)",
-        "aria-label": `${slotLabel(slot)} deck link`,
-      });
-      const linkHint = el("small", { class: "link-hint", hidden: true },
-        "Not Saved! Links must start with https:// and point to Archidekt, Manabox, Moxfield, or TopDecked");
-      // An invalid link turns red and is left out of the save: entry.link keeps
-      // the last valid value, while the deck name and checkbox still save.
-      const checkLink = () => {
-        const link = normalizeLink(linkInput.value);
-        linkInput.classList.toggle("invalid", link === null);
-        linkHint.hidden = link !== null;
-        if (link !== null) entry.link = link;
-      };
-      checkLink();  // older lists may hold links saved before these rules
-      linkInput.addEventListener("input", () => { checkLink(); onChange(slot); });
-      // Long links scroll while typing; show the start again once done.
-      linkInput.addEventListener("blur", () => {
-        linkInput.setSelectionRange(0, 0);
-        linkInput.scrollLeft = 0;
-      });
+      const { fields } = deckFields(entry, slot, () => onChange(slot));
       const box = el("input", {
         type: "checkbox", class: "done-box", title: "Deck complete?",
         "aria-label": `${slotLabel(slot)} deck complete`,
       });
       box.checked = entry.done;
-      const commit = () => {
-        entry.deck = input.value;
-        onChange(slot);
-      };
-      input.addEventListener("input", commit);
       box.addEventListener("change", () => {
         entry.done = box.checked;
         row.classList.toggle("done", box.checked);
         updateProgress();
         onChange(slot);
       });
-      attachSuggest(input, slot, commit);
-      row.append(
-        el("div", { class: "fields" }, el("div", { class: "deck-wrap" }, input), linkInput, linkHint),
-        box);
+      row.append(fields, box);
     } else {
-      // Same layout as the edit page: deck name, with its link underneath.
-      // Only valid HTTPS links are clickable; anything else is plain text.
-      const safeLink = entry.link && normalizeLink(entry.link);
-      const linkEl = safeLink
-        ? el("a", {
-          class: "deck-link", href: safeLink, title: safeLink,
-          target: "_blank", rel: "noopener noreferrer nofollow ugc",
-        }, safeLink)
-        : entry.link ? el("span", { class: "deck-link muted" }, entry.link) : null;
+      // Same layout as the edit page.
       row.append(
-        el("div", { class: "fields" },
-          el("div", { class: "deck-text" }, entry.deck), linkEl),
+        deckText(entry),
         el("span", { class: "done-mark", "aria-label": entry.done ? "complete" : "not complete" },
           entry.done ? "✓" : ""));
     }
@@ -479,6 +490,196 @@ function renderSheet(data, editable, onChange) {
     el("div", {}, head(), ...LEFT.map(slotRow)),
     el("div", {}, head(), ...RIGHT.map(slotRow)));
   return { sheet, progress };
+}
+
+// ---------- Additional decks (spares beyond the 32; not counted) ----------
+
+const slotOrder = (slot) => ALL_SLOTS.indexOf(slot);
+
+// Read-only list for the share page, or null when there's nothing to show.
+function extrasView(extras) {
+  if (!extras.length) return null;
+  return el("section", { class: "extras" },
+    el("h2", {}, "Additional Decks"),
+    el("div", { class: "extras-list" }, ...extras.map((x) =>
+      el("div", { class: "slot" + (x.done ? " done" : "") }, pips(x.slot), deckText(x),
+        el("span", { class: "done-mark", "aria-label": x.done ? "complete" : "not complete" },
+          x.done ? "✓" : "")))));
+}
+
+// Color identity picker showing mana symbols and names, like the sheet (a
+// native <select> can only show text). Read the choice from `.value`;
+// `onPick(slot)` runs when it changes. `inRow` is the compact look used in
+// an additional deck's row, where it stands in for the row's pips.
+let comboCount = 0;
+function comboPicker({ value = ALL_SLOTS[0], onPick = null, inRow = false } = {}) {
+  const listId = `combo-list-${++comboCount}`;
+  const optionId = (i) => `${listId}-${ALL_SLOTS[i]}`;
+  let chosen = ALL_SLOTS.indexOf(value);
+  let active = 0;
+  const shown = el("span", { class: "combo-shown" });
+  const button = el("button", {
+    type: "button", class: "secondary combo-button", role: "combobox",
+    "aria-label": inRow ? "Change color identity" : "Color identity", "aria-haspopup": "listbox",
+    "aria-controls": listId, "aria-expanded": "false",
+  }, shown, inRow ? null : el("span", { class: "combo-caret", "aria-hidden": "true" }, "▾"));
+  const list = el("ul", { class: "suggest combo-list", role: "listbox", id: listId, hidden: true },
+    ...ALL_SLOTS.map((slot, i) => el("li", {
+      role: "option", id: optionId(i), "aria-selected": "false", "aria-label": SLOT_NAMES[slot],
+      onmousedown: (e) => { e.preventDefault(); choose(i); },
+    }, pips(slot))));
+
+  const isOpen = () => !list.hidden;
+  function show() {
+    shown.replaceChildren(pips(ALL_SLOTS[chosen]));
+    button.title = slotLabel(ALL_SLOTS[chosen]) + (inRow ? " (click to change)" : "");
+  }
+  function highlight(i) {
+    active = (i + ALL_SLOTS.length) % ALL_SLOTS.length;
+    [...list.children].forEach((li, j) => li.setAttribute("aria-selected", String(j === active)));
+    button.setAttribute("aria-activedescendant", optionId(active));
+    list.children[active].scrollIntoView({ block: "nearest" });
+  }
+  function open() {
+    list.hidden = false;
+    button.setAttribute("aria-expanded", "true");
+    highlight(chosen);
+  }
+  function close() {
+    list.hidden = true;
+    button.setAttribute("aria-expanded", "false");
+    button.removeAttribute("aria-activedescendant");
+  }
+  function choose(i) {
+    const changed = i !== chosen;
+    chosen = i;
+    show();
+    close();
+    if (changed && onPick) onPick(ALL_SLOTS[i]);
+  }
+
+  button.addEventListener("click", () => (isOpen() ? close() : open()));
+  button.addEventListener("blur", close);
+  button.addEventListener("keydown", (e) => {
+    const keys = { ArrowDown: 1, ArrowUp: -1 };
+    if (e.key in keys) {
+      e.preventDefault();
+      if (isOpen()) highlight(active + keys[e.key]);
+      else open();
+    } else if (isOpen() && (e.key === "Home" || e.key === "End")) {
+      e.preventDefault();
+      highlight(e.key === "Home" ? 0 : ALL_SLOTS.length - 1);
+    } else if (isOpen() && (e.key === "Enter" || e.key === " ")) {
+      e.preventDefault();  // don't also submit the form or re-toggle
+      choose(active);
+    } else if (e.key === "Escape" && isOpen()) {
+      e.preventDefault();
+      close();
+    } else if (/^[a-z]$/i.test(e.key)) {
+      // Type a letter to jump to the next combo starting with it.
+      const from = isOpen() ? active : chosen;
+      for (let n = 1; n <= ALL_SLOTS.length; n++) {
+        const i = (from + n) % ALL_SLOTS.length;
+        if (SLOT_NAMES[ALL_SLOTS[i]].toLowerCase().startsWith(e.key.toLowerCase())) {
+          if (isOpen()) highlight(i); else choose(i);
+          break;
+        }
+      }
+    }
+  });
+  show();
+  const node = el("div", { class: "combo" + (inRow ? " in-row" : "") }, button, list);
+  return { node, button, get value() { return ALL_SLOTS[chosen]; } };
+}
+
+// Editable list. `onChange(extra)` queues an edit to save; adding and
+// removing talk to the server straight away, then call `onAddRemove` with
+// the removed deck (or null after adding one).
+function extrasEditor(data, getToken, onChange, onAddRemove) {
+  const list = el("div", { class: "extras-list" });
+  const msg = el("p", { class: "muted error", "aria-live": "polite" });
+  const empty = el("p", { class: "muted extras-empty no-print" },
+    "Have more than one deck in a color identity? List the others here. They don't count toward your 32.");
+  const tip = el("p", { class: "muted extras-tip no-print" },
+    "Click a deck's mana symbols to change its colors. Check the box once it's built.");
+  const updateEmpty = () => {
+    empty.hidden = data.extras.length > 0;
+    tip.hidden = !empty.hidden;
+  };
+
+  function row(extra) {
+    const { fields, input } = deckFields(extra, extra.slot, () => onChange(extra));
+    // A new color rebuilds the row, so labels and commander suggestions
+    // follow it. It stays in place until the next reload re-sorts the list.
+    const picker = comboPicker({
+      value: extra.slot, inRow: true,
+      onPick: (slot) => {
+        extra.slot = slot;
+        onChange(extra);
+        const fresh = row(extra);
+        node.replaceWith(fresh.node);
+        fresh.picker.button.focus();
+      },
+    });
+    const box = el("input", {
+      type: "checkbox", class: "done-box", title: "Deck complete?",
+      "aria-label": `${slotLabel(extra.slot)} additional deck complete`,
+    });
+    box.checked = extra.done;
+    box.addEventListener("change", () => {
+      extra.done = box.checked;
+      node.classList.toggle("done", box.checked);
+      onChange(extra);
+    });
+    const remove = el("button", {
+      type: "button", class: "remove-extra no-print",
+      "aria-label": `Remove this ${SLOT_NAMES[extra.slot]} deck`,
+    }, "Remove");
+    const node = el("div", { class: "slot" + (extra.done ? " done" : "") }, picker.node, fields,
+      el("div", { class: "extra-actions" }, box, remove));
+    remove.addEventListener("click", async () => {
+      const name = extra.deck.trim();
+      if (name && !confirm(`Remove “${name}” from your additional decks?`)) return;
+      msg.textContent = "";
+      try {
+        await api("DELETE", `/api/edit/${getToken()}/extras/${extra.id}`);
+        data.extras = data.extras.filter((x) => x !== extra);
+        node.remove();
+        updateEmpty();
+        onAddRemove(extra);
+      } catch (err) {
+        msg.textContent = err.message;
+      }
+    });
+    return { node, input, picker };
+  }
+
+  const picker = comboPicker();
+  const addForm = el("form", { class: "inline-form add-extra no-print" },
+    picker.node, el("button", { type: "submit" }, "Add deck"));
+  addForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    msg.textContent = "";
+    try {
+      const extra = await api("POST", `/api/edit/${getToken()}/extras`, { slot: picker.value });
+      // Keep sheet order, same as after a reload: new decks go last in their color.
+      const at = data.extras.findIndex((x) => slotOrder(x.slot) > slotOrder(extra.slot));
+      const index = at === -1 ? data.extras.length : at;
+      data.extras.splice(index, 0, extra);
+      const { node, input } = row(extra);
+      list.insertBefore(node, list.children[index] || null);
+      updateEmpty();
+      input.focus();
+      onAddRemove(null);
+    } catch (err) {
+      msg.textContent = err.message;
+    }
+  });
+
+  data.extras.forEach((x) => list.append(row(x).node));
+  updateEmpty();
+  return el("section", { class: "extras" },
+    el("h2", {}, "Additional Decks"), empty, tip, list, addForm, msg);
 }
 
 // "Last login" pane under the theme switch (edit page only).
@@ -512,6 +713,20 @@ function describeChange(e) {
       if (!old) return `Link added: ${now}`;
       if (!now) return `Link removed (was ${old})`;
       return `Link changed to ${now}`;
+    case "extra_added": return "Additional deck added";
+    case "extra_slot":
+      return `Additional deck changed from ${SLOT_NAMES[old] || old} to ${SLOT_NAMES[now] || now}`;
+    case "extra_done":
+      return now === "1" ? "Additional deck marked complete" : "Additional deck marked not complete";
+    case "extra_removed": return old ? `Additional deck “${old}” removed` : "Additional deck removed";
+    case "extra_deck":
+      if (!old) return `Additional deck named “${now}”`;
+      if (!now) return `Additional deck name cleared (was “${old}”)`;
+      return `Additional deck renamed from “${old}” to “${now}”`;
+    case "extra_link":
+      if (!old) return `Additional deck link added: ${now}`;
+      if (!now) return `Additional deck link removed (was ${old})`;
+      return `Additional deck link changed to ${now}`;
     case "done": return now === "1" ? "Marked complete" : "Marked not complete";
     case "listed":
       return now === "1" ? "Shown on the public leaderboard" : "Hidden from the public leaderboard";
@@ -622,15 +837,23 @@ async function renderEdit(token) {
   // Only what changed since the last save is sent, so a list open on two
   // devices can't overwrite the other device's edits to other decks.
   const pendingSlots = new Set();
+  const pendingExtras = new Set();  // additional decks, by object
   let pendingListed = false;
 
   // Takes the pending changes as a request body and clears them.
   function takePayload() {
     const body = { entries: {} };
     for (const slot of pendingSlots) body.entries[slot] = data.entries[slot];
+    if (pendingExtras.size) {
+      body.extras = {};
+      for (const x of pendingExtras) {
+        body.extras[x.id] = { slot: x.slot, deck: x.deck, link: x.link, done: x.done };
+      }
+    }
     if (pendingListed) body.listed = data.listed;
-    const taken = { slots: [...pendingSlots], listed: pendingListed };
+    const taken = { slots: [...pendingSlots], extras: [...pendingExtras], listed: pendingListed };
     pendingSlots.clear();
+    pendingExtras.clear();
     pendingListed = false;
     dirty = false;
     return { body, taken };
@@ -638,6 +861,7 @@ async function renderEdit(token) {
   // Puts changes back after a failed save so the retry includes them.
   function restorePending(taken) {
     taken.slots.forEach((s) => pendingSlots.add(s));
+    taken.extras.filter((x) => data.extras.includes(x)).forEach((x) => pendingExtras.add(x));
     pendingListed = pendingListed || taken.listed;
     dirty = true;
   }
@@ -664,8 +888,10 @@ async function renderEdit(token) {
     }
   }
   // `slot` is the deck that changed; omit it for the leaderboard checkbox.
-  function changed(slot) {
+  // Additional decks pass their object as `extra` instead.
+  function changed(slot, extra) {
     if (slot) pendingSlots.add(slot);
+    else if (extra) pendingExtras.add(extra);
     else pendingListed = true;
     dirty = true;
     status.textContent = "Unsaved changes";
@@ -780,8 +1006,9 @@ async function renderEdit(token) {
       shareCode, copyButton(shareUrl)),
     el("div", { class: "linkrow" }, el("label", {}, "Edit"),
       editCode, copyButton(editUrl)),
-    el("p", { class: "muted" },
-      "Bookmark this page. The edit link is your key, so don't share it. Send people the share link instead."),
+    el("p", { class: "notice", role: "note" },
+      el("strong", {}, "Bookmark this page."),
+      " The edit link is your key, so don't share it. Send people the share link instead."),
     changePanel,
     recoveryPanel(() => token, data, changeLog.refresh),
     el("label", { class: "muted listed-toggle" }, listedBox, " Show my progress on the public leaderboard"),
@@ -791,12 +1018,17 @@ async function renderEdit(token) {
       : null);
 
   const { sheet, progress } = renderSheet(data, true, changed);
+  const extras = extrasEditor(data, () => token, (x) => changed(null, x), (x) => {
+    if (x) pendingExtras.delete(x);
+    changeLog.refresh();
+  });
   app.replaceChildren(
     linksCard,
     el("div", { class: "sheet-head" },
       el("span", { class: "owner" }, data.name),
       progress, status),
     sheet,
+    extras,
     changeLog.node);
 }
 
@@ -872,7 +1104,8 @@ async function renderView(shareId) {
   app.replaceChildren(
     el("div", { class: "sheet-head" },
       el("span", { class: "owner" }, data.name), progress),
-    sheet);
+    sheet,
+    extrasView(data.extras || []));
 }
 
 // Leaderboard bar fill. Set through .style rather than a style="" attribute,

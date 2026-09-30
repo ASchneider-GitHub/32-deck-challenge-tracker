@@ -69,14 +69,24 @@ def describe(e):
     deck = f"[{e['slot'].upper()}] " if e["slot"] else ""
     if kind == "created":
         text = f"List created as {new}"
-    elif kind in ("deck", "link"):
-        noun = "deck" if kind == "deck" else "link"
+    elif kind in ("deck", "link", "extra_deck", "extra_link"):
+        noun = {"deck": "deck", "link": "link", "extra_deck": "additional deck",
+                "extra_link": "additional deck link"}[kind]
         if not old:
             text = f"{noun} set: {new}"
         elif not new:
             text = f"{noun} cleared (was {old})"
         else:
             text = f"{noun} changed: {old} -> {new}"
+    elif kind == "extra_added":
+        text = "additional deck added"
+    elif kind == "extra_slot":
+        text = f"additional deck color changed: {old.upper()} -> {new.upper()}"
+    elif kind == "extra_done":
+        text = ("additional deck marked complete" if new == "1"
+                else "additional deck marked not complete")
+    elif kind == "extra_removed":
+        text = f"additional deck removed ({old})" if old else "additional deck removed"
     elif kind == "done":
         text = "marked complete" if new == "1" else "marked not complete"
     elif kind == "listed":

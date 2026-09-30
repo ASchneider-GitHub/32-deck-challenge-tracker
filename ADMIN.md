@@ -37,7 +37,7 @@ Most commands take a list's **id**, the number in brackets that `list` and `find
 | `rename <id> <username>` | Change a username (also the name shown on the site) |
 | `hide <id>` | Remove a list from the leaderboard. The owner can't undo it |
 | `unhide <id>` | Undo `hide`; the owner's own leaderboard setting applies again |
-| `delete <id>` | Permanently delete a list, its decks and its history (asks to confirm) |
+| `delete <id>` | Permanently delete a list, its decks (additional ones too) and its history (asks to confirm) |
 
 ### `list` and `find`
 
@@ -61,6 +61,8 @@ A note in brackets at the end of the first line flags anything unusual:
 $ deck32 history 3
 History for [3] matt_s:
     2026-09-29 20:47  share link changed: /v/matt -> /v/matt_s  (by site admin)
+    2026-09-29 20:31  [WUB] additional deck set: Sen Triplets
+    2026-09-29 20:30  [WUB] additional deck added
     2026-09-29 20:15  [WUB] marked complete
     2026-09-29 20:12  [WUB] link set: https://moxfield.com/decks/abc
     2026-09-29 20:11  [WUB] deck set: Raffine, Scheming Seer
@@ -69,6 +71,13 @@ History for [3] matt_s:
 
 Add a number for more entries: `deck32 history 3 500`. Edit links and passphrases are never
 recorded, only the fact that they changed.
+
+Lines starting with **"additional deck"** are about the owner's Additional Decks: spare decks
+in a color identity they've already filled, listed under the main sheet. These don't count
+toward the 32 or the leaderboard. The bracketed colors show the deck's current colors, and
+`additional deck color changed: GU -> W` means the owner moved it to another color identity.
+If an additional deck was added and then removed without ever being filled in, the history
+doesn't show it at all.
 
 ### `reset`, `share`, `rename`
 
@@ -133,6 +142,10 @@ access immediately. The owner can also do this themselves from their edit page.
 their link has leaked: `reset` it and send them the new one.
 
 ### Spam or offensive entries on the leaderboard
+
+Deck names, including Additional Decks, show on the owner's share page, not on the
+leaderboard. The admin tool can't edit deck names, so for an offensive one ask the owner to
+change it, or hide or delete the list.
 
 - `deck32 hide <id>` removes it from the leaderboard but keeps the list. The owner sees a note
   saying the admin hid it.

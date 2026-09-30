@@ -164,6 +164,19 @@ button.secondary {
   margin: 8px 0;
 }
 .linkrow label { width: 3.5em; font-weight: 500; }
+
+/* Callout for the "bookmark this page" advice on the edit page. */
+.notice {
+  margin: 14px 0 6px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  border-left: 4px solid var(--accent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  line-height: 1.4;
+}
+.card .notice { margin: 14px 0 6px; }
+.notice strong { color: var(--accent); }
 .linkrow code {
   flex: 1 1 240px;
   min-width: 0;
@@ -531,3 +544,59 @@ button.secondary {
 @media (min-width: 721px) { .to-top { display: none; } }
 @media (prefers-reduced-motion: reduce) { .to-top { transition: none; } }
 @media print { .to-top { display: none !important; } }
+
+/* ---------- Additional decks (spares beyond the 32) ---------- */
+.extras { margin-top: 32px; }
+.extras h2 { margin: 0 0 6px; font-size: 1.3rem; }
+.extras-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 40px;
+}
+.extras-empty[hidden], .extras-tip[hidden] { display: none; }
+.extra-actions {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+/* Quiet text button so it doesn't compete with the checkbox. */
+.remove-extra {
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  text-decoration: underline;
+}
+.remove-extra:hover, .remove-extra:focus-visible { color: var(--error); }
+.add-extra { margin-top: 14px; }
+
+/* Color identity picker: mana symbols then the name, as on the sheet. */
+.combo { position: relative; }
+.combo-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 100%;
+}
+.combo-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.combo-caret { color: var(--ink-soft); font-size: 0.85rem; }
+.combo .pips { flex-direction: row; align-items: center; gap: 6px; }
+.combo .pip-name { font-size: 1rem; color: var(--ink); }
+.combo-list { right: auto; min-width: 100%; width: max-content; max-height: 320px; }
+.combo-list li { padding: 6px 12px; }
+/* In a row it replaces the pips, so it keeps their stacked, right-aligned look. */
+.combo.in-row { justify-self: end; }
+.combo.in-row .combo-button {
+  padding: 4px 6px;
+  border-color: transparent;
+  border-radius: 6px;
+}
+.combo.in-row .combo-button:hover { border-color: var(--card-border); background: var(--popover-hover); }
+.combo.in-row .combo-shown .pips { flex-direction: column; align-items: flex-end; gap: 3px; }
+.combo.in-row .combo-shown .pip-name { font-size: 1.08rem; color: var(--ink-soft); }
+.combo.in-row .combo-list { left: 0; }
+.extras .error:empty { display: none; }
+@media (max-width: 720px) {
+  .extras-list { grid-template-columns: 1fr; }
+}
