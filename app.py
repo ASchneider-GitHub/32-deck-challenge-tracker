@@ -816,11 +816,26 @@ def index(_token=None, _share=None):
     return index_page()
 
 
+def asset_version():
+    """Short hash of the scripts and stylesheet. index.html adds it to their
+    addresses (app.js?v=...), so after a deploy browsers fetch the new files
+    instead of reusing copies a proxy told them to keep (Cloudflare: 4 hours)."""
+    digest = hashlib.sha256()
+    for name in ("app.js", "style.css", "theme.js"):
+        with open(os.path.join(STATIC_DIR, name), "rb") as f:
+            digest.update(f.read())
+    return digest.hexdigest()[:12]
+
+
+ASSET_VERSION = asset_version()
+
+
 def index_page():
-    """index.html with {{BASE}} filled in, so page links, scripts and styles
-    point inside BASE_PATH. (BASE_PATH is validated above: no quotes or <>.)"""
+    """index.html with {{BASE}} and {{V}} filled in, so page links, scripts
+    and styles point inside BASE_PATH and at the current files. (BASE_PATH is
+    validated above: no quotes or <>.)"""
     with open(os.path.join(STATIC_DIR, "index.html"), encoding="utf-8") as f:
-        html = f.read().replace("{{BASE}}", BASE_PATH)
+        html = f.read().replace("{{BASE}}", BASE_PATH).replace("{{V}}", ASSET_VERSION)
     return Response(html, mimetype="text/html")
 
 
