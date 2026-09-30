@@ -97,14 +97,17 @@ const SLOT_NAMES = {
   c: "Colorless",
 };
 
-function pips(slot) {
-  const icons = el("span", { class: "pip-icons", "aria-hidden": "true" });
-  // Mana symbols from Scryfall (svgs.scryfall.io/card-symbols), saved in static/symbols.
-  for (const c of slot) {
-    icons.append(el("img", { src: `${BASE}/static/symbols/${c.toUpperCase()}.svg`, alt: "" }));
-  }
-  return el("div", { class: "pips", title: slotLabel(slot) },
-    icons, el("span", { class: "pip-name" }, `(${SLOT_NAMES[slot]})`));
+// Mana symbols from Scryfall (svgs.scryfall.io/card-symbols), saved in static/symbols.
+// With `shape`, they sit in a square arranged by count: a pair, triangle,
+// square or pentagon.
+function pipIcons(slot, shape = false) {
+  return el("span", { class: "pip-icons" + (shape ? ` pip-shape pips-${slot.length}` : ""), "aria-hidden": "true" },
+    ...[...slot].map((c) => el("img", { src: `${BASE}/static/symbols/${c.toUpperCase()}.svg`, alt: "" })));
+}
+
+function pips(slot, shape = false) {
+  return el("div", { class: "pips" + (shape ? " shaped" : ""), title: slotLabel(slot) },
+    pipIcons(slot, shape), el("span", { class: "pip-name" }, `(${SLOT_NAMES[slot]})`));
 }
 
 const COLOR_NAMES = { w: "White", u: "Blue", b: "Black", r: "Red", g: "Green", c: "Colorless" };
@@ -126,6 +129,10 @@ function normalizeLink(value) {
     return null;
   }
 }
+
+// "3 / 32" with narrow spaces around the slash, so fractions stay compact.
+// No-break spaces, so a fraction never wraps across two lines.
+const fraction = (n, d) => `${n}\u202F/\u202F${d}`;
 
 function countDone(entries) {
   return ALL_SLOTS.filter((s) => entries[s] && entries[s].done).length;
@@ -449,13 +456,13 @@ function renderSheet(data, editable, onChange) {
   const entries = data.entries;
   const progress = el("span", { class: "progress" });
   const updateProgress = () => {
-    progress.textContent = `${countDone(entries)} / 32 complete`;
+    progress.textContent = `${fraction(countDone(entries), 32)} complete`;
   };
   updateProgress();
 
   function slotRow(slot) {
     const entry = entries[slot] || (entries[slot] = { deck: "", link: "", done: false });
-    const row = el("div", { class: "slot" + (entry.done ? " done" : "") }, pips(slot));
+    const row = el("div", { class: "slot" + (entry.done ? " done" : "") }, pips(slot, true));
 
     if (editable) {
       const { fields } = deckFields(entry, slot, () => onChange(slot));
@@ -492,6 +499,27 @@ function renderSheet(data, editable, onChange) {
   return { sheet, progress };
 }
 
+// ---------- Collapsible sections (Additional Decks) ----------
+
+// A section under the sheet that is closed whenever the page loads, with its
+// heading and a count (`count`, a node the caller keeps up to date) always visible.
+function collapsible(title, count, ...children) {
+  return el("details", { class: "extras collapsible" },
+    el("summary", {}, el("h2", {}, title), count), ...children);
+}
+
+// Printing shows collapsed sections too, then closes them again.
+let openedForPrint = [];
+window.addEventListener("beforeprint", () => {
+  openedForPrint = [...document.querySelectorAll("details.collapsible:not([open])")];
+  openedForPrint.forEach((d) => { d.open = true; });
+});
+window.addEventListener("afterprint", () => {
+  openedForPrint.forEach((d) => { d.open = false; });
+});
+
+const deckCount = (n) => `${n} ${n === 1 ? "deck" : "decks"}`;
+
 // ---------- Additional decks (spares beyond the 32; not counted) ----------
 
 const slotOrder = (slot) => ALL_SLOTS.indexOf(slot);
@@ -499,10 +527,10 @@ const slotOrder = (slot) => ALL_SLOTS.indexOf(slot);
 // Read-only list for the share page, or null when there's nothing to show.
 function extrasView(extras) {
   if (!extras.length) return null;
-  return el("section", { class: "extras" },
-    el("h2", {}, "Additional Decks"),
+  return collapsible("Additional Decks",
+    el("span", { class: "progress" }, deckCount(extras.length)),
     el("div", { class: "extras-list" }, ...extras.map((x) =>
-      el("div", { class: "slot" + (x.done ? " done" : "") }, pips(x.slot), deckText(x),
+      el("div", { class: "slot" + (x.done ? " done" : "") }, pips(x.slot, true), deckText(x),
         el("span", { class: "done-mark", "aria-label": x.done ? "complete" : "not complete" },
           x.done ? "✓" : "")))));
 }
@@ -531,7 +559,7 @@ function comboPicker({ value = ALL_SLOTS[0], onPick = null, inRow = false } = {}
 
   const isOpen = () => !list.hidden;
   function show() {
-    shown.replaceChildren(pips(ALL_SLOTS[chosen]));
+    shown.replaceChildren(pips(ALL_SLOTS[chosen], inRow));
     button.title = slotLabel(ALL_SLOTS[chosen]) + (inRow ? " (click to change)" : "");
   }
   function highlight(i) {
@@ -602,9 +630,11 @@ function extrasEditor(data, getToken, onChange, onAddRemove) {
     "Have more than one deck in a color identity? List the others here. They don't count toward your 32.");
   const tip = el("p", { class: "muted extras-tip no-print" },
     "Click a deck's mana symbols to change its colors. Check the box once it's built.");
+  const count = el("span", { class: "progress" });
   const updateEmpty = () => {
     empty.hidden = data.extras.length > 0;
     tip.hidden = !empty.hidden;
+    count.textContent = deckCount(data.extras.length);
   };
 
   function row(extra) {
@@ -678,8 +708,7 @@ function extrasEditor(data, getToken, onChange, onAddRemove) {
 
   data.extras.forEach((x) => list.append(row(x).node));
   updateEmpty();
-  return el("section", { class: "extras" },
-    el("h2", {}, "Additional Decks"), empty, tip, list, addForm, msg);
+  return collapsible("Additional Decks", count, empty, tip, list, addForm, msg);
 }
 
 // "Last login" pane under the theme switch (edit page only).
@@ -1002,13 +1031,13 @@ async function renderEdit(token) {
     linkMsg);
 
   const linksCard = el("div", { class: "card no-print" },
+    el("p", { class: "notice", role: "note" },
+      el("strong", {}, "Bookmark this page."),
+      " The edit link is your key, so don't share it. Send people the share link instead."),
     el("div", { class: "linkrow" }, el("label", {}, "Share"),
       shareCode, copyButton(shareUrl)),
     el("div", { class: "linkrow" }, el("label", {}, "Edit"),
       editCode, copyButton(editUrl)),
-    el("p", { class: "notice", role: "note" },
-      el("strong", {}, "Bookmark this page."),
-      " The edit link is your key, so don't share it. Send people the share link instead."),
     changePanel,
     recoveryPanel(() => token, data, changeLog.refresh),
     el("label", { class: "muted listed-toggle" }, listedBox, " Show my progress on the public leaderboard"),
@@ -1132,11 +1161,12 @@ async function renderBoard() {
   }
   const table = el("table", { class: "board" },
     el("thead", {}, el("tr", {},
-      el("th", {}, "User"), el("th", {}, "Built"), el("th", {}, "Planned"), el("th", {}, ""))),
+      el("th", {}, "User"), el("th", { class: "num" }, "Built"), el("th", { class: "num" }, "Planned"),
+      el("th", {}, ""))),
     el("tbody", {}, ...rows.map((r) => el("tr", {},
-      el("td", {}, el("a", { href: `${BASE}/v/${r.share_id}` }, r.name)),
-      el("td", { class: "num" }, `${r.done} / 32`),
-      el("td", { class: "num" }, `${r.filled} / 32`),
+      el("td", { class: "board-user", title: r.name }, el("a", { href: `${BASE}/v/${r.share_id}` }, r.name)),
+      el("td", { class: "num" }, fraction(r.done, 32)),
+      el("td", { class: "num" }, fraction(r.filled, 32)),
       el("td", {}, el("div", { class: "bar" },
         progressFill(r.done)))))));
   app.replaceChildren(el("div", { class: "card" }, el("h2", {}, "Leaderboard"), table));

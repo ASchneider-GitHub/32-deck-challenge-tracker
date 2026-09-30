@@ -165,9 +165,9 @@ button.secondary {
 }
 .linkrow label { width: 3.5em; font-weight: 500; }
 
-/* Callout for the "bookmark this page" advice on the edit page. */
+/* Callout for the "bookmark this page" advice, at the top of the edit
+   page's links card, above the share and edit links. */
 .notice {
-  margin: 14px 0 6px;
   padding: 10px 14px;
   border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
   border-left: 4px solid var(--accent);
@@ -175,7 +175,7 @@ button.secondary {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
   line-height: 1.4;
 }
-.card .notice { margin: 14px 0 6px; }
+.card .notice { margin: 0 0 12px; }
 .notice strong { color: var(--accent); }
 .linkrow code {
   flex: 1 1 240px;
@@ -330,6 +330,8 @@ button.secondary {
 .board { width: 100%; border-collapse: collapse; }
 .board th, .board td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--grid); }
 .board td.num { white-space: nowrap; }
+/* Built and Planned: numbers centered under their headings. */
+.board th.num, .board td.num { text-align: center; }
 .bar {
   height: 8px;
   background: var(--bar-bg);
@@ -338,6 +340,22 @@ button.secondary {
   min-width: 80px;
 }
 .bar > span { display: block; height: 100%; background: var(--ok); }
+@media (max-width: 600px) {
+  /* Phones: drop the bar (Built shows the same number) so the table fits. */
+  .board th:last-child, .board td:last-child { display: none; }
+  .board th, .board td { padding: 8px 4px; }
+}
+/* Usernames take at most half the screen's width, ending in "…" (full name
+   on hover), so the Built and Planned numbers always fit. On the narrowest
+   phones, less than half: the page margins leave ~200px for everything else. */
+.board-user a {
+  display: inline-block;
+  max-width: min(50vw, 100vw - 200px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
 
 @media (max-width: 720px) {
   .sheet { grid-template-columns: 1fr; }
@@ -548,6 +566,29 @@ button.secondary {
 /* ---------- Additional decks (spares beyond the 32) ---------- */
 .extras { margin-top: 32px; }
 .extras h2 { margin: 0 0 6px; font-size: 1.3rem; }
+/* Collapsible sections: heading and count on one line, with a caret. */
+.collapsible > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  cursor: pointer;
+  list-style: none;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--grid);
+}
+.collapsible > summary::-webkit-details-marker { display: none; }
+.collapsible > summary::before {
+  content: "▸";
+  color: var(--ink-soft);
+  transition: transform 0.15s;
+}
+.collapsible[open] > summary::before { transform: rotate(90deg); }
+.collapsible > summary h2 { margin: 0; }
+.collapsible > summary:hover h2 { color: var(--accent); }
+.collapsible > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.collapsible[open] > summary { margin-bottom: 10px; }
+@media (prefers-reduced-motion: reduce) { .collapsible > summary::before { transition: none; } }
 .extras-list {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -585,18 +626,42 @@ button.secondary {
 .combo .pip-name { font-size: 1rem; color: var(--ink); }
 .combo-list { right: auto; min-width: 100%; width: max-content; max-height: 320px; }
 .combo-list li { padding: 6px 12px; }
-/* In a row it replaces the pips, so it keeps their stacked, right-aligned look. */
-.combo.in-row { justify-self: end; }
+/* In a row it replaces the pips, so it keeps their look: the shape centered over the name. */
+.combo.in-row { justify-self: center; }
 .combo.in-row .combo-button {
   padding: 4px 6px;
   border-color: transparent;
   border-radius: 6px;
 }
 .combo.in-row .combo-button:hover { border-color: var(--card-border); background: var(--popover-hover); }
-.combo.in-row .combo-shown .pips { flex-direction: column; align-items: flex-end; gap: 3px; }
+.combo.in-row .combo-shown .pips { flex-direction: column; align-items: center; gap: 0; }
 .combo.in-row .combo-shown .pip-name { font-size: 1.08rem; color: var(--ink-soft); }
 .combo.in-row .combo-list { left: 0; }
 .extras .error:empty { display: none; }
 @media (max-width: 720px) {
   .extras-list { grid-template-columns: 1fr; }
 }
+
+/* Mana symbols in a 3.2em square, placed by how many there are. They go
+   clockwise from the top (or top left) in the order the combo is written,
+   as in the color picker: Esper (WUB) is W top, U bottom right, B bottom left. */
+.pip-shape { display: block; position: relative; width: 3.2em; height: 3.2em; flex: none; }
+.pip-shape img { position: absolute; width: 1.1em; height: 1.1em; }
+.pip-shape.pips-1 img { left: 1.05em; top: 1.05em; }
+.pip-shape.pips-2 img:nth-child(1) { left: 0.45em; top: 1.05em; }
+.pip-shape.pips-2 img:nth-child(2) { left: 1.65em; top: 1.05em; }
+.pip-shape.pips-3 img:nth-child(1) { left: 1.05em; top: 0.45em; }
+.pip-shape.pips-3 img:nth-child(2) { left: 1.65em; top: 1.5em; }
+.pip-shape.pips-3 img:nth-child(3) { left: 0.45em; top: 1.5em; }
+.pip-shape.pips-4 img:nth-child(1) { left: 0.45em; top: 0.45em; }
+.pip-shape.pips-4 img:nth-child(2) { left: 1.65em; top: 0.45em; }
+.pip-shape.pips-4 img:nth-child(3) { left: 1.65em; top: 1.65em; }
+.pip-shape.pips-4 img:nth-child(4) { left: 0.45em; top: 1.65em; }
+/* Pentagon: WUBRG around the color wheel, as on a card back. */
+.pip-shape.pips-5 img:nth-child(1) { left: 1.05em; top: 0.05em; }
+.pip-shape.pips-5 img:nth-child(2) { left: 2.05em; top: 0.78em; }
+.pip-shape.pips-5 img:nth-child(3) { left: 1.67em; top: 1.95em; }
+.pip-shape.pips-5 img:nth-child(4) { left: 0.43em; top: 1.95em; }
+.pip-shape.pips-5 img:nth-child(5) { left: 0.05em; top: 0.78em; }
+/* On the sheet: the shape centered over the color name. */
+.pips.shaped { align-items: center; gap: 0; }

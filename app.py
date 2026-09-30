@@ -44,7 +44,6 @@ SLOTS = [
     "w", "u", "b", "r", "g", "c",
 ]
 SLOT_SET = set(SLOTS)
-MAX_NAME = 60
 MAX_DECK = 200
 MAX_LINK = 500
 # Length limits for custom share links (they're public, so short is fine).
