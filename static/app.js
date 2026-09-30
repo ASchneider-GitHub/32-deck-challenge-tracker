@@ -1101,11 +1101,13 @@ async function renderView(shareId) {
   }
   document.title = `${data.name} · 32 Deck Challenge Tracker`;
   const { sheet, progress } = renderSheet(data, false);
+  const extras = extrasView(data.extras || []);
   app.replaceChildren(
     el("div", { class: "sheet-head" },
       el("span", { class: "owner" }, data.name), progress),
     sheet,
-    extrasView(data.extras || []));
+    // replaceChildren would print a null as the text "null".
+    ...(extras ? [extras] : []));
 }
 
 // Leaderboard bar fill. Set through .style rather than a style="" attribute,
