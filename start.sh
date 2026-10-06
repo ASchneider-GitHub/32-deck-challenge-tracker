@@ -13,7 +13,7 @@ SITE_URL="https://decks.example.com"
 BASE_PATH=""
 
 docker build -t deck32-tracker .
-docker network create web 2>/dev/null
+docker network create web 2>/dev/null || true
 docker rm -f deck32-tracker 2>/dev/null || true
 
 # Backups folder on the host, writable by the container's user (uid 10001).
