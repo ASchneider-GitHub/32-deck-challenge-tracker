@@ -1,5 +1,6 @@
 #!/bin/bash
-# Build and (re)start the 32 Deck Challenge Tracker on port 5002, then follow its logs.
+# Build and (re)start the 32 Deck Challenge Tracker on the "web" Docker network
+# (reached through the https-proxy container), then follow its logs.
 # Safe to re-run after a `git pull`: the database lives in the deck32-data volume,
 # not in the container, so replacing the container keeps everyone's lists.
 set -e
@@ -12,6 +13,7 @@ SITE_URL="https://decks.example.com"
 BASE_PATH=""
 
 docker build -t deck32-tracker .
+docker network create web 2>/dev/null
 docker rm -f deck32-tracker 2>/dev/null || true
 
 # Backups folder on the host, writable by the container's user (uid 10001).
@@ -19,7 +21,7 @@ mkdir -p backups
 docker run --rm --user root -v "$PWD/backups":/b deck32-tracker chown 10001:10001 /b
 
 docker run -d --name deck32-tracker --restart unless-stopped \
-  -p 5002:8032 \
+  --network web \
   -v deck32-data:/data \
   -v "$PWD/backups":/backups \
   -e DECK32_URL="$SITE_URL" \
