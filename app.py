@@ -827,11 +827,11 @@ def index(_token=None, _share=None):
 
 
 def asset_version():
-    """Short hash of the scripts and stylesheet. index.html adds it to their
-    addresses (app.js?v=...), so after a deploy browsers fetch the new files
+    """Short hash of the scripts, stylesheet and icon. index.html adds it to
+    their addresses (app.js?v=...), so after a deploy browsers fetch the new files
     instead of reusing copies a proxy told them to keep (Cloudflare: 4 hours)."""
     digest = hashlib.sha256()
-    for name in ("app.js", "style.css", "theme.js"):
+    for name in ("app.js", "style.css", "theme.js", "favicon.svg"):
         with open(os.path.join(STATIC_DIR, name), "rb") as f:
             digest.update(f.read())
     return digest.hexdigest()[:12]
