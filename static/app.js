@@ -714,25 +714,26 @@ function extrasEditor(data, getToken, onChange, onAddRemove) {
   return collapsible("Additional Decks", count, empty, tip, list, addForm, msg);
 }
 
-// ---------- Shopping list (one link per list) ----------
+// ---------- One-link lines: Shopping List and Collection ----------
 
-// Read-only line for the share page, or null when there's no link.
-function shoppingListView(link) {
+// Read-only "Label: <link>" line for the share page, or null when there's no link.
+function linkLineView(label, link) {
   const safeLink = link && normalizeLink(link);
   if (!safeLink) return null;
-  return el("section", { class: "extras shopping-list" }, el("div", { class: "shopping-row" },
-    el("h2", {}, "Shopping List:"),
+  return el("div", { class: "link-line" },
+    el("h2", {}, label),
     el("a", {
-      class: "shop-link", href: safeLink, title: safeLink,
+      class: "line-link", href: safeLink, title: safeLink,
       target: "_blank", rel: "noopener noreferrer nofollow ugc",
-    }, safeLink)));
+    }, safeLink));
 }
 
-// Editable box. Edits go into data.shopping_list; `onChange` queues a save.
-function shoppingListEditor(data, onChange) {
+// Editable "Label: <input>" line, laid out like the share page. Edits go into
+// data[key]; `onChange` queues a save. Returns the line and its error hint.
+function linkLineEditor(label, data, key, onChange) {
   const input = el("input", {
-    type: "url", class: "link-field", value: data.shopping_list || "", maxlength: "500",
-    placeholder: "Shopping list link (https://…)", "aria-label": "Shopping list link",
+    type: "url", class: "link-field", value: data[key] || "", maxlength: "500",
+    placeholder: "https://…", "aria-label": label.replace(/:$/, "") + " link",
   });
   const hint = el("small", { class: "link-hint", hidden: true }, LINK_RULES);
   // Same rule as deck links: an invalid link turns red and isn't saved.
@@ -741,7 +742,7 @@ function shoppingListEditor(data, onChange) {
     input.classList.toggle("invalid", link === null);
     input.classList.toggle("valid", !!link);
     hint.hidden = link !== null;
-    if (link !== null) data.shopping_list = link;
+    if (link !== null) data[key] = link;
   };
   check();
   input.addEventListener("input", () => { check(); onChange(); });
@@ -749,12 +750,31 @@ function shoppingListEditor(data, onChange) {
     input.setSelectionRange(0, 0);
     input.scrollLeft = 0;
   });
-  // Laid out like the share page: "Shopping List:" then the link.
+  return [el("div", { class: "link-line" }, el("h2", {}, label), input), hint];
+}
+
+// Shopping list, under Additional Decks.
+function shoppingListView(link) {
+  const line = linkLineView("Shopping List:", link);
+  return line && el("section", { class: "extras shopping-list" }, line);
+}
+
+function shoppingListEditor(data, onChange) {
   return el("section", { class: "extras shopping-list" },
-    el("div", { class: "shopping-row" }, el("h2", {}, "Shopping List:"), input),
-    hint,
+    ...linkLineEditor("Shopping List:", data, "shopping_list", onChange),
     el("p", { class: "muted no-print shopping-note" },
       "Link a list of the cards you still need. It shows on your share page."));
+}
+
+// Collection, under the owner's name. The view returns null with no link.
+function collectionView(link) {
+  const line = linkLineView("Collection:", link);
+  return line && el("div", { class: "collection" }, line);
+}
+
+function collectionEditor(data, onChange) {
+  return el("div", { class: "collection" },
+    ...linkLineEditor("Collection:", data, "collection", onChange));
 }
 
 // "Last login" pane under the theme switch (edit page only).
@@ -806,6 +826,10 @@ function describeChange(e) {
       if (!old) return `Shopping list link added: ${now}`;
       if (!now) return `Shopping list link removed (was ${old})`;
       return `Shopping list link changed to ${now}`;
+    case "collection":
+      if (!old) return `Collection link added: ${now}`;
+      if (!now) return `Collection link removed (was ${old})`;
+      return `Collection link changed to ${now}`;
     case "done": return now === "1" ? "Marked complete" : "Marked not complete";
     case "listed":
       return now === "1" ? "Shown on the public leaderboard" : "Hidden from the public leaderboard";
@@ -919,6 +943,7 @@ async function renderEdit(token) {
   const pendingExtras = new Set();  // additional decks, by object
   let pendingListed = false;
   let pendingShop = false;
+  let pendingCollection = false;
 
   // Takes the pending changes as a request body and clears them.
   function takePayload() {
@@ -932,14 +957,16 @@ async function renderEdit(token) {
     }
     if (pendingListed) body.listed = data.listed;
     if (pendingShop) body.shopping_list = data.shopping_list;
+    if (pendingCollection) body.collection = data.collection;
     const taken = {
       slots: [...pendingSlots], extras: [...pendingExtras], listed: pendingListed,
-      shop: pendingShop,
+      shop: pendingShop, collection: pendingCollection,
     };
     pendingSlots.clear();
     pendingExtras.clear();
     pendingListed = false;
     pendingShop = false;
+    pendingCollection = false;
     dirty = false;
     return { body, taken };
   }
@@ -949,6 +976,7 @@ async function renderEdit(token) {
     taken.extras.filter((x) => data.extras.includes(x)).forEach((x) => pendingExtras.add(x));
     pendingListed = pendingListed || taken.listed;
     pendingShop = pendingShop || taken.shop;
+    pendingCollection = pendingCollection || taken.collection;
     dirty = true;
   }
 
@@ -974,11 +1002,12 @@ async function renderEdit(token) {
     }
   }
   // `slot` is the deck that changed; omit it for the leaderboard checkbox.
-  // Additional decks pass their object as `extra` instead, and the shopping
-  // list passes "shop".
+  // Additional decks pass their object as `extra` instead, the shopping
+  // list passes "shop" and the collection link "collection".
   function changed(slot, extra) {
     if (slot) pendingSlots.add(slot);
     else if (extra === "shop") pendingShop = true;
+    else if (extra === "collection") pendingCollection = true;
     else if (extra) pendingExtras.add(extra);
     else pendingListed = true;
     dirty = true;
@@ -1113,7 +1142,9 @@ async function renderEdit(token) {
   app.replaceChildren(
     linksCard,
     el("div", { class: "sheet-head" },
-      el("span", { class: "owner" }, data.name),
+      el("div", { class: "owner-block" },
+        el("span", { class: "owner" }, data.name),
+        collectionEditor(data, () => changed(null, "collection"))),
       progress, status),
     sheet,
     extras,
@@ -1195,7 +1226,10 @@ async function renderView(shareId) {
     .filter(Boolean);
   app.replaceChildren(
     el("div", { class: "sheet-head" },
-      el("span", { class: "owner" }, data.name), progress),
+      el("div", { class: "owner-block" },
+        el("span", { class: "owner" }, data.name),
+        collectionView(data.collection)),
+      progress),
     sheet,
     ...sections);
 }

@@ -69,7 +69,7 @@ HISTORY_MERGE_SECONDS = 10 * 60
 HISTORY_KINDS = ("created", "deck", "link", "done", "listed", "share_link",
                  "edit_link", "passphrase", "username", "admin_hidden",
                  "extra_added", "extra_removed", "extra_deck", "extra_link",
-                 "extra_slot", "extra_done", "shopping_list")
+                 "extra_slot", "extra_done", "shopping_list", "collection")
 # Spare decks beyond the one per color identity ("Additional Decks").
 MAX_EXTRAS = 64
 HISTORY_PAGE = 100
@@ -191,6 +191,8 @@ def init_db():
         ("admin_hidden", "INTEGER NOT NULL DEFAULT 0"),
         # One link to the owner's shopping list for cards they still need.
         ("shopping_list", "TEXT NOT NULL DEFAULT ''"),
+        # One link to the owner's card collection, shown under their name.
+        ("collection", "TEXT NOT NULL DEFAULT ''"),
     ):
         if col not in list_cols:
             db.execute(f"ALTER TABLE lists ADD COLUMN {col} {decl}")
@@ -414,6 +416,7 @@ def serialize(db, row, include_token):
         "share_id": row["share_id"],
         "listed": bool(row["listed"]),
         "shopping_list": row["shopping_list"],
+        "collection": row["collection"],
         "updated_at": row["updated_at"],
         "entries": load_entries(db, row["id"]),
         "extras": load_extras(db, row["id"]),
@@ -584,13 +587,15 @@ def update_list(token):
             log_event(db, row["id"], "listed", old=str(row["listed"]), new=str(listed),
                       merge=True)
 
-    if "shopping_list" in body:
-        # An invalid link is ignored, keeping the saved one, as for deck links.
-        link = clean_link(body["shopping_list"])
-        if link is not None and link != row["shopping_list"]:
-            db.execute("UPDATE lists SET shopping_list = ? WHERE id = ?", (link, row["id"]))
-            log_event(db, row["id"], "shopping_list", old=row["shopping_list"], new=link,
-                      merge=True)
+    # One link each. An invalid link is ignored, keeping the saved one, as for
+    # deck links.
+    for col in ("shopping_list", "collection"):
+        if col not in body:
+            continue
+        link = clean_link(body[col])
+        if link is not None and link != row[col]:
+            db.execute(f"UPDATE lists SET {col} = ? WHERE id = ?", (link, row["id"]))
+            log_event(db, row["id"], col, old=row[col], new=link, merge=True)
 
     entries = body.get("entries") or {}
     if not isinstance(entries, dict):

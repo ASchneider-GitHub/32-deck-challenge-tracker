@@ -62,7 +62,7 @@
 body {
   margin: 0;
   color: var(--ink);
-  font-family: "Alegreya", Georgia, serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 18px;
   background-color: var(--paper);
   /* Crumpled-paper texture, generated with SVG noise. */
@@ -80,15 +80,14 @@ body {
 
 h1 {
   text-align: center;
+  font-family: "Alegreya", Georgia, serif;
   font-weight: 800;
   font-size: clamp(2.2rem, 7vw, 3.6rem);
   margin: 8px 0 4px;
 }
 h1 a {
   color: inherit;
-  text-decoration: underline;
-  text-decoration-thickness: 3px;
-  text-underline-offset: 6px;
+  text-decoration: none;
 }
 
 .topnav {
@@ -198,7 +197,7 @@ button.secondary {
   margin-bottom: 16px;
 }
 .sheet-head .owner {
-  font-size: 1.5rem;
+  font-size: 1.85rem;
   font-weight: 500;
 }
 .progress { font-size: 1.1rem; }
@@ -643,19 +642,24 @@ button.secondary {
   .extras-list { grid-template-columns: 1fr; }
 }
 
-/* ---------- Shopping list (one link, under Additional Decks) ---------- */
-/* "Shopping List: <link>" on one line, on both the edit and share pages. */
-.shopping-row { display: flex; align-items: baseline; gap: 10px; }
-.shopping-row h2 { margin: 0; flex: none; color: var(--ink); }
-.shopping-row .link-field { flex: 1 1 auto; min-width: 0; margin-top: 0; }
-.shopping-list .link-hint { margin-top: 4px; }
-.shopping-note { margin: 6px 0 0; }
-.shop-link {
+/* ---------- One-link lines: Shopping List and Collection ---------- */
+/* "Label: <link>" on one line, on both the edit and share pages. */
+.link-line { display: flex; align-items: baseline; gap: 10px; }
+.link-line h2 { margin: 0; flex: none; color: var(--ink); }
+.link-line .link-field { flex: 1 1 auto; min-width: 0; margin-top: 0; }
+.line-link {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.shopping-list .link-hint { margin-top: 4px; }
+.shopping-note { margin: 6px 0 0; }
+/* Collection sits under the owner's name, a step smaller than Shopping List. */
+.owner-block { display: flex; flex-direction: column; min-width: 0; flex: 1 1 18em; }
+.collection { margin-top: 2px; font-size: 0.9rem; }
+.collection .link-line h2 { font-size: 1.1rem; }
+.collection .link-hint { margin-top: 2px; }
 
 /* Mana symbols in a 3.2em square, placed by how many there are. They go
    clockwise from the top (or top left) in the order the combo is written,
