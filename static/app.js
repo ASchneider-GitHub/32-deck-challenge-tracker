@@ -398,6 +398,9 @@ function renderRecover() {
       "Forgot your passphrase too? Ask the site admin. They can look up your list and send you the link.")));
 }
 
+const LINK_RULES = "Not Saved! Links must start with https:// and point to Archidekt, "
+  + "Manabox, Moxfield, or TopDecked";
+
 // Deck name (with commander suggestions) and link inputs for one deck.
 // Edits go into `entry`; `onChange` is called after each one.
 function deckFields(entry, slot, onChange) {
@@ -411,13 +414,13 @@ function deckFields(entry, slot, onChange) {
     placeholder: "Deck link (https://…)",
     "aria-label": `${slotLabel(slot)} deck link`,
   });
-  const linkHint = el("small", { class: "link-hint", hidden: true },
-    "Not Saved! Links must start with https:// and point to Archidekt, Manabox, Moxfield, or TopDecked");
+  const linkHint = el("small", { class: "link-hint", hidden: true }, LINK_RULES);
   // An invalid link turns red and is left out of the save: entry.link keeps
   // the last valid value, while the deck name and checkbox still save.
   const checkLink = () => {
     const link = normalizeLink(linkInput.value);
     linkInput.classList.toggle("invalid", link === null);
+    linkInput.classList.toggle("valid", !!link);
     linkHint.hidden = link !== null;
     if (link !== null) entry.link = link;
   };
@@ -711,6 +714,49 @@ function extrasEditor(data, getToken, onChange, onAddRemove) {
   return collapsible("Additional Decks", count, empty, tip, list, addForm, msg);
 }
 
+// ---------- Shopping list (one link per list) ----------
+
+// Read-only line for the share page, or null when there's no link.
+function shoppingListView(link) {
+  const safeLink = link && normalizeLink(link);
+  if (!safeLink) return null;
+  return el("section", { class: "extras shopping-list" }, el("div", { class: "shopping-row" },
+    el("h2", {}, "Shopping List:"),
+    el("a", {
+      class: "shop-link", href: safeLink, title: safeLink,
+      target: "_blank", rel: "noopener noreferrer nofollow ugc",
+    }, safeLink)));
+}
+
+// Editable box. Edits go into data.shopping_list; `onChange` queues a save.
+function shoppingListEditor(data, onChange) {
+  const input = el("input", {
+    type: "url", class: "link-field", value: data.shopping_list || "", maxlength: "500",
+    placeholder: "Shopping list link (https://…)", "aria-label": "Shopping list link",
+  });
+  const hint = el("small", { class: "link-hint", hidden: true }, LINK_RULES);
+  // Same rule as deck links: an invalid link turns red and isn't saved.
+  const check = () => {
+    const link = normalizeLink(input.value);
+    input.classList.toggle("invalid", link === null);
+    input.classList.toggle("valid", !!link);
+    hint.hidden = link !== null;
+    if (link !== null) data.shopping_list = link;
+  };
+  check();
+  input.addEventListener("input", () => { check(); onChange(); });
+  input.addEventListener("blur", () => {
+    input.setSelectionRange(0, 0);
+    input.scrollLeft = 0;
+  });
+  // Laid out like the share page: "Shopping List:" then the link.
+  return el("section", { class: "extras shopping-list" },
+    el("div", { class: "shopping-row" }, el("h2", {}, "Shopping List:"), input),
+    hint,
+    el("p", { class: "muted no-print shopping-note" },
+      "Link a list of the cards you still need. It shows on your share page."));
+}
+
 // "Last login" pane under the theme switch (edit page only).
 function showLastLogin(timestamp) {
   const pane = document.getElementById("last-login");
@@ -756,6 +802,10 @@ function describeChange(e) {
       if (!old) return `Additional deck link added: ${now}`;
       if (!now) return `Additional deck link removed (was ${old})`;
       return `Additional deck link changed to ${now}`;
+    case "shopping_list":
+      if (!old) return `Shopping list link added: ${now}`;
+      if (!now) return `Shopping list link removed (was ${old})`;
+      return `Shopping list link changed to ${now}`;
     case "done": return now === "1" ? "Marked complete" : "Marked not complete";
     case "listed":
       return now === "1" ? "Shown on the public leaderboard" : "Hidden from the public leaderboard";
@@ -868,6 +918,7 @@ async function renderEdit(token) {
   const pendingSlots = new Set();
   const pendingExtras = new Set();  // additional decks, by object
   let pendingListed = false;
+  let pendingShop = false;
 
   // Takes the pending changes as a request body and clears them.
   function takePayload() {
@@ -880,10 +931,15 @@ async function renderEdit(token) {
       }
     }
     if (pendingListed) body.listed = data.listed;
-    const taken = { slots: [...pendingSlots], extras: [...pendingExtras], listed: pendingListed };
+    if (pendingShop) body.shopping_list = data.shopping_list;
+    const taken = {
+      slots: [...pendingSlots], extras: [...pendingExtras], listed: pendingListed,
+      shop: pendingShop,
+    };
     pendingSlots.clear();
     pendingExtras.clear();
     pendingListed = false;
+    pendingShop = false;
     dirty = false;
     return { body, taken };
   }
@@ -892,6 +948,7 @@ async function renderEdit(token) {
     taken.slots.forEach((s) => pendingSlots.add(s));
     taken.extras.filter((x) => data.extras.includes(x)).forEach((x) => pendingExtras.add(x));
     pendingListed = pendingListed || taken.listed;
+    pendingShop = pendingShop || taken.shop;
     dirty = true;
   }
 
@@ -917,9 +974,11 @@ async function renderEdit(token) {
     }
   }
   // `slot` is the deck that changed; omit it for the leaderboard checkbox.
-  // Additional decks pass their object as `extra` instead.
+  // Additional decks pass their object as `extra` instead, and the shopping
+  // list passes "shop".
   function changed(slot, extra) {
     if (slot) pendingSlots.add(slot);
+    else if (extra === "shop") pendingShop = true;
     else if (extra) pendingExtras.add(extra);
     else pendingListed = true;
     dirty = true;
@@ -1058,6 +1117,7 @@ async function renderEdit(token) {
       progress, status),
     sheet,
     extras,
+    shoppingListEditor(data, () => changed(null, "shop")),
     changeLog.node);
 }
 
@@ -1130,13 +1190,14 @@ async function renderView(shareId) {
   }
   document.title = `${data.name} · 32 Deck Challenge Tracker`;
   const { sheet, progress } = renderSheet(data, false);
-  const extras = extrasView(data.extras || []);
+  // replaceChildren would print a null as the text "null".
+  const sections = [extrasView(data.extras || []), shoppingListView(data.shopping_list)]
+    .filter(Boolean);
   app.replaceChildren(
     el("div", { class: "sheet-head" },
       el("span", { class: "owner" }, data.name), progress),
     sheet,
-    // replaceChildren would print a null as the text "null".
-    ...(extras ? [extras] : []));
+    ...sections);
 }
 
 // Leaderboard bar fill. Set through .style rather than a style="" attribute,

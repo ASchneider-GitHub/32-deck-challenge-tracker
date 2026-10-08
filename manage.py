@@ -69,9 +69,10 @@ def describe(e):
     deck = f"[{e['slot'].upper()}] " if e["slot"] else ""
     if kind == "created":
         text = f"List created as {new}"
-    elif kind in ("deck", "link", "extra_deck", "extra_link"):
+    elif kind in ("deck", "link", "extra_deck", "extra_link", "shopping_list"):
         noun = {"deck": "deck", "link": "link", "extra_deck": "additional deck",
-                "extra_link": "additional deck link"}[kind]
+                "extra_link": "additional deck link",
+                "shopping_list": "shopping list link"}[kind]
         if not old:
             text = f"{noun} set: {new}"
         elif not new:

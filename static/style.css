@@ -243,17 +243,18 @@ button.secondary {
   border: none;
   background: transparent;
   font: inherit;
-  font-size: 0.8rem;
   color: var(--ink-soft);
 }
 .link-field:focus { outline: none; color: var(--ink); border-bottom: 1px dotted var(--ink-soft); }
 .link-field::placeholder { color: var(--ink-soft); opacity: 0.55; }
 .link-field.invalid { color: var(--error); border-bottom: 1px dotted var(--error); }
+/* A verified link looks like a link, so it stands out from plain text. */
+.link-field.valid { color: var(--accent); }
+/* Same size as the edit page's link fields. */
 .deck-link {
   display: block;
   margin-top: 4px;
   padding: 1px 2px;
-  font-size: 0.8rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -640,6 +641,20 @@ button.secondary {
 .extras .error:empty { display: none; }
 @media (max-width: 720px) {
   .extras-list { grid-template-columns: 1fr; }
+}
+
+/* ---------- Shopping list (one link, under Additional Decks) ---------- */
+/* "Shopping List: <link>" on one line, on both the edit and share pages. */
+.shopping-row { display: flex; align-items: baseline; gap: 10px; }
+.shopping-row h2 { margin: 0; flex: none; color: var(--ink); }
+.shopping-row .link-field { flex: 1 1 auto; min-width: 0; margin-top: 0; }
+.shopping-list .link-hint { margin-top: 4px; }
+.shopping-note { margin: 6px 0 0; }
+.shop-link {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Mana symbols in a 3.2em square, placed by how many there are. They go

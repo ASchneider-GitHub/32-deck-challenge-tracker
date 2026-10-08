@@ -7,6 +7,7 @@ Track one Commander deck per color identity. Each list gets:
 - A public **leaderboard** at `/board` (users can opt out)
 - An **Additional Decks** section for spare decks in a color identity already on the
   list. They show on the share page but don't count toward the 32
+- A **Shopping List** link (same deck sites as deck links) shown on the share page
 - A **username + recovery passphrase**, chosen at signup, which users can enter at
   `/recover` to get their edit link back
 
