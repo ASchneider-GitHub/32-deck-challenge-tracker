@@ -54,7 +54,7 @@ USERNAME_RULES = ("Username must be 3–30 characters, consisting of letters, nu
                   "periods, underscores, or hyphens. This value cannot be changed later "
                   "without site admin input.")
 # Deck links must point at one of these sites (or a subdomain like www.).
-DECK_SITES = ("archidekt.com", "manabox.app", "moxfield.com", "topdecked.com")
+DECK_SITES = ("archidekt.com", "manabox.app", "moxfield.com", "mythic.tools", "topdecked.com")
 MIN_PASSPHRASE = 8
 MAX_PASSPHRASE = 200
 # Wrong passphrases allowed per username before recovery is paused.

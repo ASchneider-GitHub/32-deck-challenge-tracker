@@ -117,7 +117,7 @@ function slotLabel(slot) {
 
 // Mirrors clean_link() in app.py. Returns "" for empty, the link if it's an
 // https:// link to a supported deck site, or null for anything else.
-const DECK_SITES = ["archidekt.com", "manabox.app", "moxfield.com", "topdecked.com"];
+const DECK_SITES = ["archidekt.com", "manabox.app", "moxfield.com", "mythic.tools", "topdecked.com"];
 function normalizeLink(value) {
   const link = value.trim();
   if (!link) return "";
@@ -399,7 +399,7 @@ function renderRecover() {
 }
 
 const LINK_RULES = "Not Saved! Links must start with https:// and point to Archidekt, "
-  + "Manabox, Moxfield, or TopDecked";
+  + "Manabox, Moxfield, Mythic Tools, or TopDecked";
 
 // Deck name (with commander suggestions) and link inputs for one deck.
 // Edits go into `entry`; `onChange` is called after each one.
